@@ -311,6 +311,15 @@
     text-overflow: ellipsis;
   }
 
+  .mini-queue-summary {
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--text-muted);
+    display: none;
+  }
+
+  .mini-queue-summary.visible { display: block; }
+
   /* Section styling */
   .section { margin: 24px 20px; }
   
@@ -700,6 +709,7 @@
       <div class="mini-up-next-label">Up Next</div>
       <div class="mini-up-next-track" id="miniUpNextTitle"></div>
       <div class="mini-up-next-artist" id="miniUpNextArtist"></div>
+      <div class="mini-queue-summary" id="miniQueueSummary"></div>
     </div>
   </div>
 </div>
@@ -880,12 +890,21 @@
     document.getElementById('npArtist').textContent = track.artist;
     document.getElementById('npArt').src = track.albumArt || '';
     const upNextEl = document.getElementById('miniUpNext');
+    const queueSummaryEl = document.getElementById('miniQueueSummary');
     if (upcomingTrack) {
       document.getElementById('miniUpNextTitle').textContent = upcomingTrack.title || '—';
       document.getElementById('miniUpNextArtist').textContent = upcomingTrack.artist || '';
       upNextEl.classList.add('visible');
+      const moreCount = Math.max(0, currentQueue.length - 1);
+      if (moreCount > 0) {
+        queueSummaryEl.textContent = `${moreCount} more song${moreCount === 1 ? '' : 's'} waiting after this`;
+        queueSummaryEl.classList.add('visible');
+      } else {
+        queueSummaryEl.classList.remove('visible');
+      }
     } else {
       upNextEl.classList.remove('visible');
+      queueSummaryEl.classList.remove('visible');
     }
   }
 
