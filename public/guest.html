@@ -275,6 +275,42 @@
     text-overflow: ellipsis;
   }
 
+  .mini-up-next {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    display: none;
+  }
+
+  .mini-up-next.visible { display: block; }
+
+  .mini-up-next-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+
+  .mini-up-next-track {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mini-up-next-artist {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   /* Section styling */
   .section { margin: 24px 20px; }
   
@@ -660,6 +696,11 @@
     <div class="label">Now Playing</div>
     <div class="title" id="npTitle"></div>
     <div class="artist" id="npArtist"></div>
+    <div class="mini-up-next" id="miniUpNext">
+      <div class="mini-up-next-label">Up Next</div>
+      <div class="mini-up-next-track" id="miniUpNextTitle"></div>
+      <div class="mini-up-next-artist" id="miniUpNextArtist"></div>
+    </div>
   </div>
 </div>
 
@@ -692,7 +733,7 @@
   const socket = io();
   socket.on('queueUpdate', ({ queue, currentTrack }) => {
     renderQueue(queue);
-    renderNowPlaying(currentTrack);
+    renderNowPlaying(currentTrack, queue[0] || null);
   });
 
   // ─── Search ──────────────────────────────────────────────────────────────
@@ -831,13 +872,21 @@
   }
 
   // ─── Render Now Playing ──────────────────────────────────────────────────
-  function renderNowPlaying(track) {
+  function renderNowPlaying(track, upcomingTrack = null) {
     const el = document.getElementById('nowPlaying');
     if (!track) { el.classList.remove('visible'); return; }
     el.classList.add('visible');
     document.getElementById('npTitle').textContent = track.title;
     document.getElementById('npArtist').textContent = track.artist;
     document.getElementById('npArt').src = track.albumArt || '';
+    const upNextEl = document.getElementById('miniUpNext');
+    if (upcomingTrack) {
+      document.getElementById('miniUpNextTitle').textContent = upcomingTrack.title || '—';
+      document.getElementById('miniUpNextArtist').textContent = upcomingTrack.artist || '';
+      upNextEl.classList.add('visible');
+    } else {
+      upNextEl.classList.remove('visible');
+    }
   }
 
   // ─── Toast ───────────────────────────────────────────────────────────────
