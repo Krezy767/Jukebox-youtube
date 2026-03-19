@@ -402,9 +402,7 @@
   }
 
   .suggested-grid {
-    display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(0, 31%);
+    display: flex;
     gap: 8px;
     overflow-x: auto;
     overscroll-behavior-x: contain;
@@ -428,6 +426,7 @@
     cursor: pointer;
     transition: all 0.18s ease;
     scroll-snap-align: start;
+    flex: 0 0 31%;
   }
 
   .suggested-card:hover {
