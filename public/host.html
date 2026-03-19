@@ -1,0 +1,1442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jukebox — Host Player</title>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0a0a;
+    --surface: #161616;
+    --surface2: #1f1f1f;
+    --accent: #1db954;
+    --text: #fff;
+    --muted: #666;
+    --border: #222;
+    --red: #e84040;
+    --amber: #f5a623;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+  }
+  .container { width: 100%; max-width: 560px; }
+  .logo { font-size: 32px; text-align: center; margin-bottom: 8px; }
+  h1 { text-align: center; font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+  .sub { text-align: center; font-size: 14px; color: var(--muted); margin-bottom: 32px; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 28px;
+    margin-bottom: 20px;
+  }
+  .card-title {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+  .status-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    background: var(--surface2);
+    border-radius: 12px;
+    margin-bottom: 10px;
+    font-size: 14px;
+  }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .dot.ok { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .dot.waiting { background: var(--muted); }
+  .dot.error { background: var(--red); }
+  .now-playing {
+    display: none;
+    align-items: center;
+    gap: 20px;
+    padding: 20px;
+    background: linear-gradient(135deg, #1a2e1d, #111);
+    border: 1px solid #2d4a31;
+    border-radius: 16px;
+    margin-bottom: 20px;
+  }
+  .now-playing.visible { display: flex; }
+  .now-playing img {
+    width: 80px;
+    height: 80px;
+    border-radius: 12px;
+    object-fit: cover;
+    background: #333;
+    flex-shrink: 0;
+  }
+  .now-playing .label {
+    font-size: 11px;
+    color: var(--accent);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+  }
+  .now-playing .title { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  .now-playing .artist { font-size: 14px; color: var(--muted); }
+  .eq {
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    height: 24px;
+    margin-top: 10px;
+  }
+  .eq span {
+    width: 4px;
+    background: var(--accent);
+    border-radius: 2px;
+    animation: eq 0.7s ease-in-out infinite alternate;
+  }
+  .eq span:nth-child(2) { animation-delay: 0.15s; }
+  .eq span:nth-child(3) { animation-delay: 0.3s; }
+  .eq span:nth-child(4) { animation-delay: 0.1s; }
+  @keyframes eq { from { height: 4px; } to { height: 22px; } }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 22px;
+    border-radius: 12px;
+    border: none;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.15s;
+  }
+  .btn-spotify { background: var(--accent); color: #000; width: 100%; justify-content: center; }
+  .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-warning { background: var(--amber); color: #111; }
+  .queue-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px;
+    border-radius: 10px;
+    margin-bottom: 6px;
+    background: var(--surface2);
+  }
+  .queue-item img { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; background: #333; }
+  .queue-item .title { font-size: 13px; font-weight: 600; }
+  .queue-item .artist { font-size: 11px; color: var(--muted); }
+  .queue-item .votes {
+    margin-left: auto;
+    font-size: 12px;
+    font-weight: 700;
+    background: #252525;
+    padding: 3px 8px;
+    border-radius: 20px;
+    flex-shrink: 0;
+  }
+  .log {
+    font-family: monospace;
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 8px;
+    line-height: 1.6;
+    max-height: 120px;
+    overflow-y: auto;
+  }
+  .request-box {
+    margin-top: 12px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: #231d10;
+    border: 1px solid #4b3e16;
+    display: none;
+  }
+  .request-box.visible { display: block; }
+  .request-title { font-size: 12px; color: var(--amber); font-weight: 700; margin-bottom: 4px; text-transform: uppercase; }
+  .request-track { font-size: 14px; font-weight: 600; }
+  .request-artist { font-size: 12px; color: var(--muted); }
+  .debug-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .debug-item {
+    padding: 10px 12px;
+    background: var(--surface2);
+    border-radius: 12px;
+    min-width: 0;
+  }
+  .debug-label {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 4px;
+  }
+  .debug-value {
+    font-size: 12px;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--text);
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="logo">🎧</div>
+  <h1>Host Player</h1>
+  <p class="sub">Keep this page open on your bar device</p>
+
+  <div class="now-playing" id="nowPlaying">
+    <img id="npArt" src="" alt="">
+    <div style="flex:1;min-width:0">
+      <div class="label" id="npLabel">Now playing</div>
+      <div class="title" id="npTitle">—</div>
+      <div class="artist" id="npArtist"></div>
+      <div style="display:flex;align-items:center;gap:12px;margin-top:10px">
+        <div class="eq">
+          <span style="height:10px"></span>
+          <span style="height:18px"></span>
+          <span style="height:8px"></span>
+          <span style="height:14px"></span>
+        </div>
+        <div id="progressText" style="font-size:12px;color:var(--muted);font-family:monospace">0:00 / 0:00</div>
+      </div>
+      <div style="margin-top:8px;display:flex;align-items:center;gap:8px">
+        <button class="btn btn-secondary" style="padding:8px 16px;font-size:13px" onclick="togglePlay()" id="playPauseBtn">⏸ Pause</button>
+        <button class="btn btn-warning" style="padding:8px 16px;font-size:13px" onclick="forcePlay()" id="forcePlayBtn">▶ Play Requested Track</button>
+        <button class="btn btn-secondary" style="padding:8px 16px;font-size:13px" onclick="jumpToLastTenSeconds()" id="jumpLastTenBtn">⏭ Last 10s</button>
+      </div>
+      <div class="request-box" id="requestBox">
+        <div class="request-title">Requested On Server</div>
+        <div class="request-track" id="requestTitle">—</div>
+        <div class="request-artist" id="requestArtist"></div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;align-items:center">
+      <input type="range" id="volumeSlider" min="0" max="1" step="0.1" value="0.8" style="width:40px;accent-color:var(--accent)" title="Volume">
+      <button id="muteBtn" class="btn btn-secondary" style="padding:8px 12px;font-size:12px" onclick="toggleMute()">🔊</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Status</div>
+    <div class="status-row">
+      <div class="dot" id="authDot"></div>
+      <span id="authLabel">Checking Spotify auth…</span>
+    </div>
+    <div class="status-row">
+      <div class="dot" id="playerDot"></div>
+      <span id="playerLabel">Spotify player not ready</span>
+    </div>
+    <div class="status-row">
+      <div class="dot" id="socketDot"></div>
+      <span id="socketLabel">Connecting to server…</span>
+    </div>
+    <div class="log" id="log"></div>
+  </div>
+
+  <div id="authSection" style="display:none">
+    <div class="card">
+      <div class="card-title">Connect Spotify</div>
+      <p style="font-size:14px;color:var(--muted);margin-bottom:16px">
+        You need to connect your Spotify Premium account to enable playback.
+      </p>
+      <a href="/auth/login" class="btn btn-spotify">Connect Spotify</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Queue <span id="queueCount" style="color:var(--accent)">0</span></div>
+    <div id="queuePreview"><p style="font-size:13px;color:var(--muted)">Queue is empty</p></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Debug</div>
+    <div class="debug-grid">
+      <div class="debug-item">
+        <div class="debug-label">Server Current</div>
+        <div class="debug-value" id="dbgServerCurrent">—</div>
+      </div>
+      <div class="debug-item">
+        <div class="debug-label">Server Target</div>
+        <div class="debug-value" id="dbgServerTarget">—</div>
+      </div>
+      <div class="debug-item">
+        <div class="debug-label">SDK Loaded</div>
+        <div class="debug-value" id="dbgSdkTrack">—</div>
+      </div>
+      <div class="debug-item">
+        <div class="debug-label">Upcoming</div>
+        <div class="debug-value" id="dbgUpcoming">—</div>
+      </div>
+      <div class="debug-item">
+        <div class="debug-label">Last Staged</div>
+        <div class="debug-value" id="dbgStaged">—</div>
+      </div>
+      <div class="debug-item">
+        <div class="debug-label">Command</div>
+        <div class="debug-value" id="dbgCommand">idle</div>
+      </div>
+      <div class="debug-item">
+        <div class="debug-label">Result</div>
+        <div class="debug-value" id="dbgResult">—</div>
+      </div>
+      <div class="debug-item">
+        <div class="debug-label">Flags</div>
+        <div class="debug-value" id="dbgFlags">—</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://sdk.scdn.co/spotify-player.js"></script>
+<script>
+  let player, deviceId, socket;
+  const hostId = (() => {
+    let id = sessionStorage.getItem('jukebox_host_id');
+    if (!id) {
+      id = 'host_' + Math.random().toString(36).slice(2, 10);
+      sessionStorage.setItem('jukebox_host_id', id);
+    }
+    return id;
+  })();
+
+  let isHostOwner = false;
+  let authReady = false;
+  let playerInitialized = false;
+  let sdkActivated = false;
+  let playbackCommandInFlight = false;
+  let spotifyCooldownUntil = 0;
+  let startupTrackAcked = false;
+  let trackEndTimeout = null;
+  let stageUpcomingTimer = null;
+  let playbackWatchdogInterval = null;
+  let playbackProgressTicker = null;
+  let playbackDeadlineAt = 0;
+  let lastAckedTrackId = null;
+  let lastStagedUpcomingId = null;
+  let lastTargetTrackId = null;
+  let lastAutoSkipTargetId = null;
+  let manualSwitchInFlight = false;
+  let lastForeignTrackPauseAt = 0;
+  let pausedForeignTrackId = null;
+  let foreignRecoveryTrackId = null;
+  let confirmedTargetGrace = null;
+  let lastNextRequestTrackId = null;
+  let userPausedPlayback = false;
+  let previousPlaybackSnapshot = { trackId: null, position: 0, duration: 0, paused: true };
+  let pendingNaturalAdvanceTrackId = null;
+  let pendingAdvanceAfterForeignTrackId = null;
+  let replayRecoveryTrackId = null;
+  let currentTargetStartedAt = 0;
+  let lastProgressState = { position: 0, duration: 0, paused: true, updatedAt: 0 };
+  let transitionPauseUntil = 0;
+
+  let actualTrack = null;
+  let currentServerTrack = null;
+  let targetTrack = null;
+  let upcomingTrack = null;
+  let lastCommandLabel = 'idle';
+  let lastResultLabel = '—';
+
+  function log(msg) {
+    const el = document.getElementById('log');
+    el.innerHTML += `<div>${new Date().toLocaleTimeString()} — ${msg}</div>`;
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function formatDebugTrack(track) {
+    if (!track?.trackId) return '—';
+    return `${track.title || 'Unknown'}\n${track.trackId}${track.artist ? `\n${track.artist}` : ''}`;
+  }
+
+  function setDebugCommand(label) {
+    lastCommandLabel = label;
+    updateDebugPanel();
+  }
+
+  function setDebugResult(label) {
+    lastResultLabel = label;
+    updateDebugPanel();
+  }
+
+  function updateDebugPanel() {
+    document.getElementById('dbgServerCurrent').textContent = formatDebugTrack(currentServerTrack);
+    document.getElementById('dbgServerTarget').textContent = formatDebugTrack(targetTrack);
+    document.getElementById('dbgSdkTrack').textContent = formatDebugTrack(actualTrack);
+    document.getElementById('dbgUpcoming').textContent = formatDebugTrack(upcomingTrack);
+    document.getElementById('dbgStaged').textContent = lastStagedUpcomingId || '—';
+    document.getElementById('dbgCommand').textContent = lastCommandLabel;
+    document.getElementById('dbgResult').textContent = lastResultLabel;
+    document.getElementById('dbgFlags').textContent = [
+      `owner=${isHostOwner}`,
+      `auth=${authReady}`,
+      `sdk=${sdkActivated}`,
+      `busy=${playbackCommandInFlight}`,
+      `manual=${manualSwitchInFlight}`,
+      `startupAck=${startupTrackAcked}`,
+      `foreignPause=${lastForeignTrackPauseAt ? 'yes' : 'no'}`,
+      `transition=${transitionPauseUntil && Date.now() < transitionPauseUntil ? 'yes' : 'no'}`,
+      `grace=${confirmedTargetGrace && Date.now() < confirmedTargetGrace.expiresAt ? confirmedTargetGrace.trackId : 'no'}`,
+      `deadline=${playbackDeadlineAt ? Math.max(0, Math.round((playbackDeadlineAt - Date.now()) / 1000)) + 's' : 'no'}`,
+    ].join(' | ');
+  }
+
+  function markConfirmedTargetGrace(trackId, ms = 3000) {
+    if (!trackId) return;
+    confirmedTargetGrace = { trackId, expiresAt: Date.now() + ms };
+    updateDebugPanel();
+  }
+
+  function targetHasBeenPlayingLongEnough() {
+    return !!(currentTargetStartedAt && Date.now() - currentTargetStartedAt > 30000);
+  }
+
+  function shouldAdvanceAfterForeignJump() {
+    if (!upcomingTrack?.trackId) return false;
+    if (!targetTrack?.trackId || currentServerTrack?.trackId !== targetTrack.trackId) return false;
+    if (previousPlaybackSnapshot.trackId !== targetTrack.trackId) return false;
+
+    const previousPosition = previousPlaybackSnapshot.position || 0;
+    const previousDuration = previousPlaybackSnapshot.duration || 0;
+    const nearEndByDuration =
+      previousDuration > 0 &&
+      (
+        previousPosition >= previousDuration - 15000 ||
+        previousPosition >= previousDuration * 0.65
+      );
+
+    return nearEndByDuration || previousPosition >= 45000 || targetHasBeenPlayingLongEnough();
+  }
+
+  function shouldStartSilentHandoff(state) {
+    if (!state || state.paused) return false;
+    if (userPausedPlayback || manualSwitchInFlight) return false;
+    if (!actualTrack?.trackId || !targetTrack?.trackId || !upcomingTrack?.trackId) return false;
+    if (actualTrack.trackId !== targetTrack.trackId) return false;
+    if (currentServerTrack?.trackId !== targetTrack.trackId) return false;
+    if (lastNextRequestTrackId === actualTrack.trackId) return false;
+    const duration = state.duration || 0;
+    const position = state.position || 0;
+    if (!duration) return false;
+    const remaining = duration - position;
+    return remaining > 250 && remaining <= 1500;
+  }
+
+  function setPlaybackDeadline(trackId, position, duration) {
+    if (!trackId || !duration) return;
+    playbackDeadlineAt = Date.now() + Math.max(0, duration - (position || 0)) + 2000;
+    updateDebugPanel();
+  }
+
+  async function pauseForTransition(reason) {
+    if (!player || userPausedPlayback) return;
+    const state = await player.getCurrentState().catch(() => null);
+    if (!state || state.paused) return;
+    try {
+      await player.pause();
+      transitionPauseUntil = Date.now() + 4000;
+      log(`Transition pause: ${reason}`);
+      setDebugResult(`paused for transition: ${reason}`);
+      updateDebugPanel();
+    } catch (err) {
+      setDebugResult(`transition pause failed: ${err.message}`);
+      updateDebugPanel();
+    }
+  }
+
+  function isForeignSdkTrack() {
+    if (!actualTrack?.trackId) return false;
+    if (confirmedTargetGrace && Date.now() < confirmedTargetGrace.expiresAt && actualTrack.trackId === confirmedTargetGrace.trackId) {
+      return false;
+    }
+    const matchesCurrent = currentServerTrack?.trackId && actualTrack.trackId === currentServerTrack.trackId;
+    const matchesTarget = targetTrack?.trackId && actualTrack.trackId === targetTrack.trackId;
+    return !matchesCurrent && !matchesTarget;
+  }
+
+  async function pauseForeignPlayback() {
+    if (!player || !actualTrack?.trackId) return;
+    if (Date.now() - lastForeignTrackPauseAt < 5000) return;
+    lastForeignTrackPauseAt = Date.now();
+    setDebugCommand(`pause foreign: ${actualTrack.title}`);
+    try {
+      await player.pause();
+      pausedForeignTrackId = actualTrack.trackId;
+      log(`Paused foreign track: ${actualTrack.title}`);
+      setDebugResult(`paused foreign sdk track ${actualTrack.title}`);
+      if (targetTrack?.trackId && foreignRecoveryTrackId !== targetTrack.trackId) {
+        foreignRecoveryTrackId = targetTrack.trackId;
+        setTimeout(() => {
+          if (targetTrack?.trackId !== foreignRecoveryTrackId) return;
+          if (manualSwitchInFlight) return;
+          if (pendingAdvanceAfterForeignTrackId === actualTrack?.trackId || shouldAdvanceAfterForeignJump()) {
+            pendingAdvanceAfterForeignTrackId = null;
+            lastForeignTrackPauseAt = 0;
+            log(`Foreign track appeared late — requesting next instead of reviving ${targetTrack.title}`);
+            setDebugResult(`advance after foreign jump from ${targetTrack.title}`);
+            requestNextTrack();
+            return;
+          }
+          log(`Recovering requested track: ${targetTrack.title}`);
+          playRequestedTrack(true);
+        }, 700);
+      }
+    } catch (err) {
+      setDebugResult(`pause foreign failed: ${err.message}`);
+    } finally {
+      updateDebugPanel();
+    }
+  }
+
+  async function pauseReplayingTrack() {
+    if (!player || !actualTrack?.trackId) return;
+    if (replayRecoveryTrackId === actualTrack.trackId) return;
+    replayRecoveryTrackId = actualTrack.trackId;
+    setDebugCommand(`pause replay: ${actualTrack.title}`);
+    try {
+      await player.pause();
+      log(`Paused replaying track: ${actualTrack.title}`);
+      setDebugResult(`paused replaying track ${actualTrack.title}`);
+    } catch (err) {
+      setDebugResult(`pause replay failed: ${err.message}`);
+    } finally {
+      updateDebugPanel();
+    }
+  }
+
+  function clearStageUpcomingTimer() {
+    clearTimeout(stageUpcomingTimer);
+    stageUpcomingTimer = null;
+  }
+
+  function scheduleStageUpcoming() {
+    clearStageUpcomingTimer();
+    if (!targetTrack?.trackId || actualTrack?.trackId !== targetTrack.trackId) return;
+    stageUpcomingTimer = setTimeout(() => {
+      stageUpcomingTrack();
+    }, 1200);
+  }
+
+  function setStatus(id, dotId, state, text) {
+    document.getElementById(id).textContent = text;
+    const dot = document.getElementById(dotId);
+    dot.className = 'dot';
+    dot.classList.add(state === 'ok' ? 'ok' : state === 'error' ? 'error' : 'waiting');
+  }
+
+  function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function trackUri(track) {
+    return track ? (track.uri || `spotify:track:${track.trackId}`) : null;
+  }
+
+  function formatTime(ms) {
+    if (!ms) return '0:00';
+    const totalSeconds = Math.floor(ms / 1000);
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return mins + ':' + secs.toString().padStart(2, '0');
+  }
+
+  function updateProgress(state) {
+    if (state) {
+      lastProgressState = {
+        position: state.position || 0,
+        duration: state.duration || 0,
+        paused: state.paused ?? true,
+        updatedAt: Date.now(),
+      };
+    }
+    const duration = lastProgressState.duration || 0;
+    const elapsed = lastProgressState.paused ? 0 : Math.max(0, Date.now() - lastProgressState.updatedAt);
+    const position = Math.min(duration || Infinity, (lastProgressState.position || 0) + elapsed);
+    const paused = lastProgressState.paused ?? true;
+    document.getElementById('progressText').textContent = `${formatTime(position)} / ${formatTime(duration)}`;
+    document.getElementById('playPauseBtn').textContent = paused ? '▶ Play' : '⏸ Pause';
+  }
+
+  async function handlePlayerState(state) {
+    if (!state) return;
+    updateProgress(state);
+    clearTimeout(trackEndTimeout);
+
+    const sdkTrack = state.track_window?.current_track;
+    if (sdkTrack?.id) {
+      const previousTrackId = actualTrack?.trackId || null;
+      const changedTrack = sdkTrack.id !== actualTrack?.trackId;
+      const previousTrackWasNearEnd =
+        previousPlaybackSnapshot.trackId === previousTrackId &&
+        previousPlaybackSnapshot.duration > 0 &&
+        previousPlaybackSnapshot.position >= previousPlaybackSnapshot.duration - 15000;
+      actualTrack = {
+        trackId: sdkTrack.id,
+        title: sdkTrack.name,
+        artist: sdkTrack.artists.map(a => a.name).join(', '),
+        albumArt: sdkTrack.album.images[0]?.url || sdkTrack.album.images[1]?.url || '',
+        isFallback: targetTrack?.trackId === sdkTrack.id ? !!targetTrack?.isFallback : !!currentServerTrack?.isFallback,
+      };
+
+      if (changedTrack) {
+        lastNextRequestTrackId = null;
+        renderNowPlaying(actualTrack);
+        renderRequestedTrack();
+        log(`Now playing: ${actualTrack.title}`);
+        setDebugResult(`sdk loaded ${actualTrack.title}`);
+
+        const naturalAdvanceToUpcoming =
+          targetTrack?.trackId &&
+          previousTrackId === targetTrack.trackId &&
+          upcomingTrack?.trackId === sdkTrack.id &&
+          sdkTrack.id !== targetTrack.trackId;
+
+        const naturalAdvanceAfterTargetEnd =
+          targetTrack?.trackId &&
+          previousTrackId === targetTrack.trackId &&
+          sdkTrack.id !== targetTrack.trackId &&
+          previousTrackWasNearEnd;
+
+        if (naturalAdvanceAfterTargetEnd && (!upcomingTrack?.trackId || upcomingTrack.trackId !== sdkTrack.id)) {
+          pendingAdvanceAfterForeignTrackId = sdkTrack.id;
+        }
+
+        if (naturalAdvanceToUpcoming && pendingNaturalAdvanceTrackId !== sdkTrack.id) {
+          pendingNaturalAdvanceTrackId = sdkTrack.id;
+          log(`Natural advance detected: ${actualTrack.title}`);
+          acknowledgeActualTrack(actualTrack, { naturalAdvance: true });
+        }
+      }
+
+      if (!startupTrackAcked && currentServerTrack?.trackId !== sdkTrack.id) {
+        startupTrackAcked = true;
+        await acknowledgeActualTrack(actualTrack, { adoptTarget: true });
+        renderRequestedTrack();
+        updateDebugPanel();
+        return;
+      }
+
+      if (targetTrack?.trackId === sdkTrack.id) {
+        lastForeignTrackPauseAt = 0;
+        pausedForeignTrackId = null;
+        foreignRecoveryTrackId = null;
+        pendingAdvanceAfterForeignTrackId = null;
+        markConfirmedTargetGrace(sdkTrack.id);
+        if (previousTrackId !== sdkTrack.id) {
+          currentTargetStartedAt = Date.now();
+        }
+        if (!state.paused) {
+          setPlaybackDeadline(sdkTrack.id, state.position, state.duration);
+        }
+        transitionPauseUntil = 0;
+        await acknowledgeActualTrack(actualTrack);
+        renderRequestedTrack();
+        scheduleStageUpcoming();
+        updateDebugPanel();
+      } else {
+        clearStageUpcomingTimer();
+        updateDebugPanel();
+        if (isForeignSdkTrack() && !state.paused) {
+          pauseForeignPlayback();
+        }
+      }
+    }
+
+    const sameTrackAsBefore = previousPlaybackSnapshot.trackId && previousPlaybackSnapshot.trackId === sdkTrack?.id;
+    const wasNearEnd = previousPlaybackSnapshot.duration > 0 &&
+      previousPlaybackSnapshot.position >= previousPlaybackSnapshot.duration - 15000;
+    const restartedSameTrack = sameTrackAsBefore && wasNearEnd && state.position < 2000;
+    const replayInsteadOfAdvance =
+      restartedSameTrack &&
+      !!upcomingTrack?.trackId &&
+      sdkTrack?.id === targetTrack?.trackId;
+    const stoppedAfterEnd = sameTrackAsBefore && wasNearEnd && state.paused && state.position < 2000;
+
+    if (shouldStartSilentHandoff(state)) {
+      log(`Silent handoff window reached for ${actualTrack?.title || 'track'} — requesting next`);
+      requestNextTrack();
+    } else if (state.paused && state.duration > 0 && state.position >= state.duration - 500) {
+      requestNextTrack();
+    } else if (!userPausedPlayback && (replayInsteadOfAdvance || restartedSameTrack || stoppedAfterEnd)) {
+      if (replayInsteadOfAdvance) {
+        pauseReplayingTrack();
+      }
+      log(`Detected end of ${actualTrack?.title || 'track'} — requesting next`);
+      requestNextTrack();
+    }
+
+    previousPlaybackSnapshot = {
+      trackId: sdkTrack?.id || null,
+      position: state.position || 0,
+      duration: state.duration || 0,
+      paused: !!state.paused,
+    };
+
+    if (!state.paused && pausedForeignTrackId === sdkTrack?.id) {
+      pausedForeignTrackId = null;
+    }
+
+    if (state.paused && actualTrack?.trackId === targetTrack?.trackId) {
+      playbackDeadlineAt = 0;
+      updateDebugPanel();
+    }
+
+    if (targetTrack?.trackId === sdkTrack?.id) {
+      replayRecoveryTrackId = null;
+    }
+  }
+
+  function renderNowPlaying(track) {
+    const el = document.getElementById('nowPlaying');
+    if (!track) {
+      el.classList.remove('visible');
+      document.title = 'Jukebox — Host Player';
+      return;
+    }
+    el.classList.add('visible');
+    document.getElementById('npTitle').textContent = track.title || 'Unknown track';
+    document.getElementById('npArtist').textContent = track.artist || '';
+    document.getElementById('npArt').src = track.albumArt || '';
+    document.getElementById('npLabel').textContent = track.isFallback ? 'Autoplay' : 'Now playing';
+    document.getElementById('npLabel').style.color = track.isFallback ? '#ffa502' : 'var(--accent)';
+    document.title = `▶ ${track.title} — Jukebox`;
+  }
+
+  function renderRequestedTrack() {
+    const box = document.getElementById('requestBox');
+    if (!targetTrack || actualTrack?.trackId === targetTrack.trackId) {
+      box.classList.remove('visible');
+      return;
+    }
+    document.getElementById('requestTitle').textContent = targetTrack.title || 'Unknown track';
+    document.getElementById('requestArtist').textContent = targetTrack.artist || '';
+    box.classList.add('visible');
+  }
+
+  function renderQueue(queue) {
+    document.getElementById('queueCount').textContent = queue.length;
+    const el = document.getElementById('queuePreview');
+    if (!queue.length) {
+      el.innerHTML = '<p style="font-size:13px;color:var(--muted)">Queue is empty</p>';
+      return;
+    }
+    el.innerHTML = queue.slice(0, 5).map((item, i) => `
+      <div class="queue-item">
+        <span style="font-size:12px;font-weight:700;color:${i === 0 ? '#1db954' : '#555'};width:16px">${i + 1}</span>
+        <img src="${item.albumArt || ''}" alt="">
+        <div>
+          <div class="title">${esc(item.title)}</div>
+          <div class="artist">${esc(item.artist)}</div>
+        </div>
+        <span class="votes">▲ ${item.votes}</span>
+      </div>`).join('');
+  }
+
+  function getRetryAfterMs(errorMessage) {
+    const match = String(errorMessage || '').match(/retry after:? (\d+)/i);
+    return match ? Number(match[1]) * 1000 : 30000;
+  }
+
+  async function runPlaybackCommand(fn) {
+    if (Date.now() < spotifyCooldownUntil) {
+      throw new Error('Spotify rate limited - wait a few seconds');
+    }
+    if (playbackCommandInFlight) {
+      throw new Error('Playback change already in progress');
+    }
+    playbackCommandInFlight = true;
+    try {
+      return await fn();
+    } catch (err) {
+      const message = err?.message || String(err);
+      if (message.includes('429')) {
+        spotifyCooldownUntil = Date.now() + getRetryAfterMs(message);
+        log(`Spotify rate limited — backing off for ${Math.ceil((spotifyCooldownUntil - Date.now()) / 1000)}s`);
+      }
+      throw err;
+    } finally {
+      playbackCommandInFlight = false;
+    }
+  }
+
+  async function getToken() {
+    const response = await fetch('/auth/token');
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.accessToken) {
+      throw new Error(data.error || 'Spotify authentication required on host page');
+    }
+    return data.accessToken;
+  }
+
+  async function transferPlaybackToHost(play = false) {
+    const token = await getToken();
+    const response = await fetch('https://api.spotify.com/v1/me/player', {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ device_ids: [deviceId], play }),
+    });
+    if (!response.ok && response.status !== 204) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error?.message || `Transfer ${response.status}`);
+    }
+  }
+
+  async function spotifyQueue(uri) {
+    const token = await getToken();
+    const response = await fetch(
+      `https://api.spotify.com/v1/me/player/queue?uri=${encodeURIComponent(uri)}&device_id=${deviceId}`,
+      { method: 'POST', headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!response.ok && response.status !== 204) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error?.message || `Queue ${response.status}`);
+    }
+  }
+
+  async function spotifyNext() {
+    const token = await getToken();
+    const response = await fetch(
+      `https://api.spotify.com/v1/me/player/next?device_id=${deviceId}`,
+      { method: 'POST', headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!response.ok && response.status !== 204) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error?.message || `Next ${response.status}`);
+    }
+  }
+
+  async function spotifyPlay(uri) {
+    const token = await getToken();
+    const response = await fetch(
+      `https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`,
+      {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uris: [uri], position_ms: 0 }),
+      }
+    );
+    if (response.ok || response.status === 204) return { restricted: false };
+    const err = await response.json().catch(() => ({}));
+    const message = err.error?.message || `HTTP ${response.status}`;
+    if (response.status === 403 && message.toLowerCase().includes('restriction')) {
+      return { restricted: true };
+    }
+    throw new Error(message);
+  }
+
+  async function activateSdkPlayback(force = false) {
+    if (!player || (sdkActivated && !force)) return true;
+    try {
+      await player.activateElement();
+      sdkActivated = true;
+      log('Playback enabled for this tab');
+      return true;
+    } catch (err) {
+      if (force) log('Playback activation failed: ' + err.message);
+      return false;
+    }
+  }
+
+  async function acknowledgeActualTrack(track, options = {}) {
+    const serverAlreadyMatches = currentServerTrack?.trackId === track?.trackId;
+    if (!track?.trackId || (track.trackId === lastAckedTrackId && serverAlreadyMatches)) return;
+    if (!options.naturalAdvance) {
+      lastAckedTrackId = track.trackId;
+    }
+    try {
+      await fetch('/api/host/ack', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...track,
+          adoptTarget: !!options.adoptTarget,
+          naturalAdvance: !!options.naturalAdvance,
+        }),
+      });
+    } catch (err) {
+      log('Ack failed: ' + err.message);
+    }
+  }
+
+  async function stageUpcomingTrack() {
+    if (!isHostOwner || !upcomingTrack?.trackId || !deviceId) return false;
+    if (upcomingTrack.trackId === actualTrack?.trackId) return true;
+    if (upcomingTrack.trackId === lastStagedUpcomingId) return true;
+    if (playbackCommandInFlight || manualSwitchInFlight) return false;
+    try {
+      setDebugCommand(`stage upcoming: ${upcomingTrack.title}`);
+      await runPlaybackCommand(async () => {
+        // Do not transfer with play=false here; that can pause the
+        // currently playing correct track right after a successful switch.
+        await spotifyQueue(trackUri(upcomingTrack));
+      });
+      lastStagedUpcomingId = upcomingTrack.trackId;
+      log(`Queued next track: ${upcomingTrack.title}`);
+      setDebugResult(`staged upcoming ${upcomingTrack.title}`);
+      return true;
+    } catch (err) {
+      if (!String(err.message).includes('Playback change already in progress')) {
+        log(`Stage next failed: ${err.message}`);
+        setDebugResult(`stage upcoming failed: ${err.message}`);
+      }
+      return false;
+    }
+  }
+
+  async function stageRequestedTrack() {
+    if (!isHostOwner || !targetTrack?.trackId || !deviceId) return false;
+    try {
+      setDebugCommand(`stage requested: ${targetTrack.title}`);
+      await runPlaybackCommand(async () => {
+        // Queueing the requested track should not pause current playback.
+        await spotifyQueue(trackUri(targetTrack));
+      });
+      log(`Queued requested track: ${targetTrack.title}`);
+      setDebugResult(`staged requested ${targetTrack.title}`);
+      return true;
+    } catch (err) {
+      log(`Queue requested failed: ${err.message}`);
+      setDebugResult(`stage requested failed: ${err.message}`);
+      return false;
+    }
+  }
+
+  async function waitForLoadedTrack(trackId, timeoutMs = 2500) {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < timeoutMs) {
+      const state = await player?.getCurrentState().catch(() => null);
+      const loadedId = state?.track_window?.current_track?.id || null;
+      if (loadedId === trackId) {
+        return state;
+      }
+      await sleep(200);
+    }
+    return null;
+  }
+
+  async function tryAutomaticSkipToTarget() {
+    if (!targetTrack?.trackId || !actualTrack?.trackId) return;
+    if (lastAutoSkipTargetId === targetTrack.trackId) return;
+    if (manualSwitchInFlight) return;
+    if (currentServerTrack?.trackId && actualTrack.trackId !== currentServerTrack.trackId) {
+      renderRequestedTrack();
+      log(`Out of sync — SDK is on ${actualTrack.title}, press Play Requested Track for ${targetTrack.title}`);
+      setDebugResult(`out of sync sdk=${actualTrack.title} current=${currentServerTrack.title}`);
+      return;
+    }
+
+    lastAutoSkipTargetId = targetTrack.trackId;
+    try {
+      setDebugCommand(`auto direct play: ${targetTrack.title}`);
+      const result = await runPlaybackCommand(async () => {
+        await transferPlaybackToHost(false);
+        await sleep(300);
+        return spotifyPlay(trackUri(targetTrack));
+      });
+
+      if (!result.restricted) {
+        const confirmedDirect = await waitForLoadedTrack(targetTrack.trackId);
+        if (confirmedDirect) {
+          try { await player.seek(0); } catch (err) {}
+          try { await player.resume(); } catch (err) {}
+          userPausedPlayback = false;
+          log(`Started requested track: ${targetTrack.title}`);
+          markConfirmedTargetGrace(targetTrack.trackId);
+          setDebugResult(`auto direct confirmed ${targetTrack.title}`);
+          return;
+        }
+      }
+
+      const staged = await stageRequestedTrack();
+      if (!staged) {
+        renderRequestedTrack();
+        return;
+      }
+      setDebugCommand(`auto next: ${targetTrack.title}`);
+      await runPlaybackCommand(async () => {
+        await transferPlaybackToHost(false);
+        await sleep(250);
+        await spotifyNext();
+      });
+      const confirmedFallback = await waitForLoadedTrack(targetTrack.trackId);
+      if (confirmedFallback) {
+        try { await player.seek(0); } catch (err) {}
+        try { await player.resume(); } catch (err) {}
+        userPausedPlayback = false;
+        log(`Advanced to requested track: ${targetTrack.title}`);
+        markConfirmedTargetGrace(targetTrack.trackId);
+        setDebugResult(`auto next confirmed ${targetTrack.title}`);
+      } else {
+        log(`Spotify stayed on another track after skip to ${targetTrack.title}`);
+        setDebugResult(`auto next not confirmed for ${targetTrack.title}`);
+      }
+    } catch (err) {
+      log(`Auto skip failed: ${err.message}`);
+      setDebugResult(`auto next failed: ${err.message}`);
+    }
+  }
+
+  async function playRequestedTrack(manual = false) {
+    if (!targetTrack?.trackId || !deviceId) return;
+    if (manualSwitchInFlight) return;
+
+    manualSwitchInFlight = true;
+    setDebugCommand(`manual play: ${targetTrack.title}`);
+    try {
+      await activateSdkPlayback(true);
+
+      const state = await player?.getCurrentState().catch(() => null);
+      const loadedId = state?.track_window?.current_track?.id || null;
+
+      const result = await runPlaybackCommand(async () => {
+        await transferPlaybackToHost(false);
+        await sleep(300);
+        return spotifyPlay(trackUri(targetTrack));
+      });
+
+      if (result.restricted) {
+        log(`Spotify blocked direct play for ${targetTrack.title}`);
+        setDebugResult(`direct play restricted for ${targetTrack.title}`);
+      } else {
+        const confirmedDirect = await waitForLoadedTrack(targetTrack.trackId);
+        if (confirmedDirect) {
+          try { await player.seek(0); } catch (err) {}
+          await sleep(200);
+          try { await player.seek(0); } catch (err) {}
+          try { await player.resume(); } catch (err) {}
+          userPausedPlayback = false;
+          log(`Started requested track: ${targetTrack.title}`);
+          markConfirmedTargetGrace(targetTrack.trackId);
+          setDebugResult(`direct play confirmed ${targetTrack.title}`);
+          return;
+        }
+        setDebugResult(`direct play not confirmed for ${targetTrack.title}`);
+      }
+
+      const staged = await stageRequestedTrack();
+      if (!staged) {
+        return;
+      }
+
+      setDebugCommand(`manual next fallback: ${targetTrack.title}`);
+      await runPlaybackCommand(async () => {
+        await transferPlaybackToHost(false);
+        await sleep(250);
+        await spotifyNext();
+      });
+
+      const confirmedFallback = await waitForLoadedTrack(targetTrack.trackId, 3000);
+      if (confirmedFallback) {
+        try { await player.seek(0); } catch (err) {}
+        await sleep(200);
+        try { await player.seek(0); } catch (err) {}
+        try { await player.resume(); } catch (err) {}
+        userPausedPlayback = false;
+        log(`Started requested track via fallback: ${targetTrack.title}`);
+        markConfirmedTargetGrace(targetTrack.trackId);
+        setDebugResult(`fallback confirmed ${targetTrack.title}`);
+      } else {
+        log(`Spotify kept the wrong song loaded instead of ${targetTrack.title}`);
+        setDebugResult(`fallback not confirmed for ${targetTrack.title}`);
+      }
+    } catch (err) {
+      log(`Play requested failed: ${err.message}`);
+      setDebugResult(`manual play failed: ${err.message}`);
+    } finally {
+      manualSwitchInFlight = false;
+      updateDebugPanel();
+    }
+  }
+
+  function maybeStartPlayer() {
+    if (!authReady || !isHostOwner || playerInitialized) return;
+    playerInitialized = true;
+    initPlayer();
+  }
+
+  function tryBootstrapTargetPlayback() {
+    if (!isHostOwner || !deviceId || !targetTrack?.trackId) return;
+    if (actualTrack?.trackId === targetTrack.trackId) return;
+    if (manualSwitchInFlight || playbackCommandInFlight) return;
+    setTimeout(() => {
+      if (!isHostOwner || !deviceId || !targetTrack?.trackId) return;
+      if (actualTrack?.trackId === targetTrack.trackId) return;
+      if (manualSwitchInFlight || playbackCommandInFlight) return;
+      log(`Bootstrapping target track: ${targetTrack.title}`);
+      playRequestedTrack(false);
+    }, 400);
+  }
+
+  async function checkAuth() {
+    const res = await fetch('/auth/status');
+    const { authenticated } = await res.json();
+    authReady = authenticated;
+    if (authenticated) {
+      setStatus('authLabel', 'authDot', 'ok', 'Spotify connected ✓');
+      document.getElementById('authSection').style.display = 'none';
+      maybeStartPlayer();
+    } else {
+      setStatus('authLabel', 'authDot', 'error', 'Not connected to Spotify');
+      document.getElementById('authSection').style.display = 'block';
+    }
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('auth') === 'error') {
+    setStatus('authLabel', 'authDot', 'error', 'Spotify auth failed — try again');
+  }
+
+  socket = io();
+  socket.on('connect', () => {
+    setStatus('socketLabel', 'socketDot', 'ok', 'Server connected ✓');
+    log('Server connected');
+    setStatus('playerLabel', 'playerDot', 'waiting', 'Claiming host control…');
+    socket.emit('registerHost', { hostId });
+  });
+
+  socket.on('disconnect', () => {
+    setStatus('socketLabel', 'socketDot', 'error', 'Server disconnected!');
+    isHostOwner = false;
+    playerInitialized = false;
+  });
+
+  socket.on('hostAccepted', () => {
+    isHostOwner = true;
+    setStatus('playerLabel', 'playerDot', 'waiting', 'Host control claimed');
+    log('Host control claimed');
+    maybeStartPlayer();
+  });
+
+  socket.on('hostRejected', ({ reason }) => {
+    isHostOwner = false;
+    setStatus('playerLabel', 'playerDot', 'error', 'Another host page is active');
+    log(reason || 'Another host page is active');
+  });
+
+  socket.on('queueUpdate', ({ queue, currentTrack, targetTrack: nextTarget }) => {
+    renderQueue(queue);
+    const previousUpcomingId = upcomingTrack?.trackId || null;
+    currentServerTrack = currentTrack || null;
+    targetTrack = nextTarget || null;
+    upcomingTrack = queue[0] ? {
+      trackId: queue[0].trackId,
+      uri: trackUri(queue[0]),
+      title: queue[0].title,
+      artist: queue[0].artist,
+      albumArt: queue[0].albumArt,
+      isFallback: queue[0].isFallback,
+    } : null;
+
+    if (previousUpcomingId && previousUpcomingId !== upcomingTrack?.trackId) {
+      lastStagedUpcomingId = null;
+    }
+
+    if (!targetTrack) {
+      clearStageUpcomingTimer();
+      renderRequestedTrack();
+      return;
+    }
+
+    const targetChanged = targetTrack.trackId !== lastTargetTrackId;
+    lastTargetTrackId = targetTrack.trackId;
+    if (targetChanged) {
+      if (currentServerTrack?.trackId !== targetTrack.trackId) {
+        lastAckedTrackId = null;
+      }
+      if (actualTrack?.trackId && currentServerTrack?.trackId === actualTrack.trackId && targetTrack?.trackId !== actualTrack.trackId) {
+        pauseForTransition(`switching to ${targetTrack.title}`);
+      }
+      lastAutoSkipTargetId = null;
+    }
+
+    renderRequestedTrack();
+    updateDebugPanel();
+
+    if (!actualTrack?.trackId && currentServerTrack) {
+      renderNowPlaying(currentServerTrack);
+    }
+
+    if (actualTrack?.trackId === targetTrack.trackId) {
+      lastForeignTrackPauseAt = 0;
+      foreignRecoveryTrackId = null;
+      markConfirmedTargetGrace(targetTrack.trackId);
+      if (!currentTargetStartedAt || previousPlaybackSnapshot.trackId !== targetTrack.trackId) {
+        currentTargetStartedAt = Date.now();
+      }
+      playbackDeadlineAt = 0;
+      scheduleStageUpcoming();
+      return;
+    }
+
+    clearStageUpcomingTimer();
+
+    if (isForeignSdkTrack()) {
+      renderRequestedTrack();
+      if (pausedForeignTrackId === actualTrack?.trackId && targetChanged && !manualSwitchInFlight) {
+        log(`Foreign track already paused — starting requested track: ${targetTrack.title}`);
+        playRequestedTrack(false);
+        return;
+      }
+      pauseForeignPlayback();
+      return;
+    }
+
+    if (!actualTrack?.trackId) {
+      log(`Ready to start: ${targetTrack.title}`);
+      setDebugResult(`ready to start ${targetTrack.title}`);
+      tryBootstrapTargetPlayback();
+      return;
+    }
+
+    if (targetChanged) {
+      tryAutomaticSkipToTarget();
+    }
+  });
+
+  window.onSpotifyWebPlaybackSDKReady = () => {
+    checkAuth();
+  };
+
+  async function initPlayer() {
+    if (!isHostOwner) {
+      playerInitialized = false;
+      return;
+    }
+
+    try {
+      await getToken();
+    } catch (err) {
+      setStatus('authLabel', 'authDot', 'error', 'Spotify auth expired — reconnect');
+      document.getElementById('authSection').style.display = 'block';
+      log(err.message);
+      playerInitialized = false;
+      return;
+    }
+
+    player = new Spotify.Player({
+      name: 'Bar Jukebox 🎵',
+      getOAuthToken: async cb => {
+        try {
+          cb(await getToken());
+        } catch (err) {
+          setStatus('authLabel', 'authDot', 'error', 'Spotify auth expired — reconnect');
+          document.getElementById('authSection').style.display = 'block';
+          log(err.message);
+        }
+      },
+      volume: 0.8,
+    });
+
+    const activateOnGesture = async () => {
+      const ok = await activateSdkPlayback();
+      if (!ok) return;
+      window.removeEventListener('click', activateOnGesture);
+      window.removeEventListener('touchstart', activateOnGesture);
+      window.removeEventListener('keydown', activateOnGesture);
+    };
+    window.addEventListener('click', activateOnGesture, { passive: true });
+    window.addEventListener('touchstart', activateOnGesture, { passive: true });
+    window.addEventListener('keydown', activateOnGesture);
+
+    player.addListener('ready', async ({ device_id }) => {
+      deviceId = device_id;
+      log(`Player ready. Device: ${device_id.slice(0, 8)}…`);
+      setStatus('playerLabel', 'playerDot', 'ok', 'Spotify player ready ✓');
+
+      const registerRes = await fetch('/api/device', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId, hostId }),
+      });
+
+      if (!registerRes.ok) {
+        const data = await registerRes.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to register host device');
+      }
+
+      try {
+        await transferPlaybackToHost(false);
+      } catch (err) {}
+
+      log('Device ready — waiting for admin to start music');
+      tryBootstrapTargetPlayback();
+
+      if (playbackWatchdogInterval) clearInterval(playbackWatchdogInterval);
+      playbackWatchdogInterval = setInterval(async () => {
+        const polledState = await player.getCurrentState().catch(() => null);
+        if (polledState) {
+          await handlePlayerState(polledState);
+        }
+        if (!actualTrack?.trackId || !targetTrack?.trackId) return;
+        if (actualTrack.trackId !== targetTrack.trackId) return;
+        if (userPausedPlayback || manualSwitchInFlight) return;
+        if (!playbackDeadlineAt || Date.now() < playbackDeadlineAt) return;
+        if (lastNextRequestTrackId === actualTrack.trackId) return;
+        log(`Playback deadline reached for ${actualTrack.title} — requesting next`);
+        requestNextTrack();
+      }, 1000);
+
+      if (playbackProgressTicker) clearInterval(playbackProgressTicker);
+      playbackProgressTicker = setInterval(() => {
+        updateProgress();
+      }, 250);
+    });
+
+    player.addListener('not_ready', () => {
+      log('Player went offline');
+      setStatus('playerLabel', 'playerDot', 'error', 'Player offline — refresh page');
+    });
+
+    player.addListener('player_state_changed', async state => {
+      await handlePlayerState(state);
+    });
+
+    player.addListener('initialization_error', ({ message }) => {
+      setStatus('playerLabel', 'playerDot', 'error', 'Init error: ' + message);
+      log(message);
+    });
+
+    player.addListener('authentication_error', ({ message }) => {
+      setStatus('authLabel', 'authDot', 'error', 'Auth error — reconnect Spotify');
+      document.getElementById('authSection').style.display = 'block';
+      log(message);
+    });
+
+    player.addListener('account_error', ({ message }) => {
+      setStatus('playerLabel', 'playerDot', 'error', 'Spotify Premium required');
+      log(message);
+    });
+
+    player.connect();
+  }
+
+  let isMuted = false;
+  let previousVolume = 0.8;
+
+  document.getElementById('volumeSlider').addEventListener('input', async e => {
+    const vol = parseFloat(e.target.value);
+    if (player) {
+      await player.setVolume(vol);
+      log('Volume: ' + Math.round(vol * 100) + '%');
+    }
+    if (vol > 0) {
+      isMuted = false;
+      document.getElementById('muteBtn').textContent = '🔊';
+    }
+  });
+
+  async function togglePlay() {
+    await activateSdkPlayback(true);
+    setDebugCommand('toggle play');
+    const state = await player?.getCurrentState().catch(() => null);
+      if (state) {
+      if (state.paused) {
+        await player.resume();
+        userPausedPlayback = false;
+        log('Resumed');
+        setDebugResult('resumed current sdk track');
+      } else {
+        await player.pause();
+        userPausedPlayback = true;
+        log('Paused');
+        setDebugResult('paused current sdk track');
+      }
+      return;
+    }
+
+    if (targetTrack?.trackId) {
+      await playRequestedTrack(true);
+    }
+  }
+
+  async function forcePlay() {
+    setDebugCommand('force play requested');
+    await playRequestedTrack(true);
+  }
+
+  async function jumpToLastTenSeconds() {
+    if (!player) return;
+    setDebugCommand('jump to last 10s');
+    try {
+      const state = await player.getCurrentState().catch(() => null);
+      if (!state?.track_window?.current_track?.id || !state.duration) {
+        setDebugResult('jump failed: no active track');
+        return;
+      }
+      const targetPosition = Math.max(0, state.duration - 10000);
+      await player.seek(targetPosition);
+      userPausedPlayback = false;
+      log(`Jumped to last 10s of ${state.track_window.current_track.name}`);
+      setDebugResult(`jumped to ${formatTime(targetPosition)}`);
+    } catch (err) {
+      log(`Jump to last 10s failed: ${err.message}`);
+      setDebugResult(`jump failed: ${err.message}`);
+    } finally {
+      updateDebugPanel();
+    }
+  }
+
+  async function toggleMute() {
+    if (!player) return;
+    const slider = document.getElementById('volumeSlider');
+    if (isMuted) {
+      await player.setVolume(previousVolume);
+      slider.value = previousVolume;
+      isMuted = false;
+      document.getElementById('muteBtn').textContent = '🔊';
+      log('Volume: ' + Math.round(previousVolume * 100) + '%');
+      setDebugResult(`volume ${Math.round(previousVolume * 100)}%`);
+    } else {
+      previousVolume = parseFloat(slider.value);
+      await player.setVolume(0);
+      slider.value = 0;
+      isMuted = true;
+      document.getElementById('muteBtn').textContent = '🔇';
+      log('Muted');
+      setDebugResult('muted');
+    }
+  }
+
+  async function requestNextTrack() {
+    clearTimeout(trackEndTimeout);
+    if (userPausedPlayback) return;
+    if (actualTrack?.trackId && lastNextRequestTrackId === actualTrack.trackId) return;
+    lastNextRequestTrackId = actualTrack?.trackId || null;
+    try {
+      setDebugCommand('request next');
+      if (actualTrack?.trackId && targetTrack?.trackId === actualTrack.trackId) {
+        await pauseForTransition(`advancing from ${actualTrack.title}`);
+      }
+      const res = await fetch('/api/next', { method: 'POST' });
+      const { track } = await res.json();
+      if (track) {
+        log(`Server selected: ${track.title} — ${track.artist}`);
+        setDebugResult(`server selected ${track.title}`);
+        pendingNaturalAdvanceTrackId = null;
+      }
+    } catch (err) {
+      log('Error fetching next track');
+      setDebugResult('request next failed');
+    }
+  }
+</script>
+</body>
+</html>

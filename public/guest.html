@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Bar Jukebox</title>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+  
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface-elevated: #1a1a25;
+    --surface-hover: #252533;
+    --accent: #00d4aa;
+    --accent-glow: rgba(0, 212, 170, 0.3);
+    --accent-secondary: #ff6b9d;
+    --text: #ffffff;
+    --text-secondary: #a0a0b0;
+    --text-muted: #6b6b7b;
+    --border: #2a2a3a;
+    --success: #00d4aa;
+    --error: #ff4757;
+    --warning: #ffa502;
+  }
+  
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    min-height: 100vh;
+    max-width: 480px;
+    margin: 0 auto;
+    padding-bottom: 100px;
+    overflow-x: hidden;
+  }
+
+  /* Animated background gradient */
+  body::before {
+    content: '';
+    position: fixed;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(ellipse at 30% 20%, rgba(0, 212, 170, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 70% 80%, rgba(255, 107, 157, 0.05) 0%, transparent 50%);
+    animation: gradientShift 20s ease-in-out infinite;
+    pointer-events: none;
+    z-index: -1;
+  }
+  
+  @keyframes gradientShift {
+    0%, 100% { transform: translate(0, 0) rotate(0deg); }
+    50% { transform: translate(-2%, -2%) rotate(5deg); }
+  }
+
+  /* Header */
+  .header {
+    background: linear-gradient(180deg, rgba(18, 18, 26, 0.95) 0%, rgba(10, 10, 15, 0.95) 100%);
+    padding: 24px 20px 16px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+  }
+  
+  .header-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  
+  .logo {
+    width: 44px;
+    height: 44px;
+    background: linear-gradient(135deg, var(--accent), #00b894);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    box-shadow: 0 4px 20px var(--accent-glow);
+  }
+  
+  .header-text h1 {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, #fff 0%, #a0a0b0 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  
+  .header-text p {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+  }
+
+  /* Search */
+  .search-container {
+    position: relative;
+  }
+  
+  .search-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  
+  .search-input {
+    width: 100%;
+    background: var(--surface-elevated);
+    border: 1.5px solid var(--border);
+    border-radius: 16px;
+    padding: 14px 44px 14px 48px;
+    color: var(--text);
+    font-size: 16px;
+    font-weight: 500;
+    outline: none;
+    transition: all 0.2s ease;
+  }
+  
+  .search-input:focus {
+    border-color: var(--accent);
+    background: var(--surface);
+    box-shadow: 0 0 0 4px var(--accent-glow);
+  }
+  
+  .search-input::placeholder { color: var(--text-muted); }
+  
+  .search-icon {
+    position: absolute;
+    left: 16px;
+    color: var(--text-muted);
+    font-size: 18px;
+    pointer-events: none;
+  }
+  
+  .search-clear {
+    position: absolute;
+    right: 12px;
+    background: var(--surface-hover);
+    border: none;
+    color: var(--text-secondary);
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 14px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+  }
+  
+  .search-clear:hover {
+    background: var(--border);
+    color: var(--text);
+  }
+
+  /* Now Playing Card */
+  .now-playing {
+    margin: 20px 20px 0;
+    background: linear-gradient(135deg, rgba(0, 212, 170, 0.15), rgba(0, 212, 170, 0.05));
+    border: 1px solid rgba(0, 212, 170, 0.3);
+    border-radius: 20px;
+    padding: 16px;
+    display: none;
+    backdrop-filter: blur(10px);
+    animation: slideDown 0.4s ease;
+  }
+  
+  @keyframes slideDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  .now-playing.visible { display: flex; gap: 14px; align-items: center; }
+  
+  .now-playing .artwork {
+    position: relative;
+    flex-shrink: 0;
+  }
+  
+  .now-playing img {
+    width: 64px;
+    height: 64px;
+    border-radius: 12px;
+    object-fit: cover;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  }
+  
+  .playing-indicator {
+    position: absolute;
+    bottom: -4px;
+    right: -4px;
+    background: var(--accent);
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--bg);
+  }
+  
+  .playing-indicator span {
+    width: 3px;
+    height: 8px;
+    background: var(--bg);
+    margin: 0 1px;
+    border-radius: 2px;
+    animation: soundbar 0.5s ease-in-out infinite alternate;
+  }
+  
+  .playing-indicator span:nth-child(2) { animation-delay: 0.1s; height: 12px; }
+  .playing-indicator span:nth-child(3) { animation-delay: 0.2s; height: 6px; }
+  
+  @keyframes soundbar {
+    from { transform: scaleY(0.5); }
+    to { transform: scaleY(1); }
+  }
+  
+  .now-playing .info { flex: 1; min-width: 0; }
+  
+  .now-playing .label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--accent);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  
+  .now-playing .label::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+  
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.2); }
+  }
+  
+  .now-playing .title {
+    font-size: 15px;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    letter-spacing: -0.3px;
+  }
+  
+  .now-playing .artist {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-top: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Section styling */
+  .section { margin: 24px 20px; }
+  
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  
+  .section-title {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .section-title .count {
+    background: var(--surface-elevated);
+    color: var(--text-secondary);
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  /* Track card (search results) */
+  .track-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px;
+    border-radius: 16px;
+    background: var(--surface);
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+  }
+  
+  .track-card:hover {
+    background: var(--surface-elevated);
+    border-color: var(--border);
+    transform: translateX(4px);
+  }
+  
+  .track-card:active { transform: scale(0.98); }
+  
+  .track-card img {
+    width: 56px;
+    height: 56px;
+    border-radius: 10px;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: var(--surface-hover);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+  
+  .track-info { flex: 1; min-width: 0; }
+  
+  .track-title {
+    font-size: 15px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    letter-spacing: -0.2px;
+  }
+  
+  .track-artist {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-top: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  .track-badge {
+    font-size: 10px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-weight: 700;
+    flex-shrink: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  
+  .badge-explicit { background: #3a3a4a; color: var(--text-muted); }
+  
+  .badge-inqueue {
+    background: rgba(0, 212, 170, 0.15);
+    color: var(--accent);
+  }
+
+  .add-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: var(--accent);
+    border: none;
+    color: var(--bg);
+    font-size: 22px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 15px var(--accent-glow);
+  }
+  
+  .add-btn:hover {
+    background: #00e6b8;
+    transform: scale(1.08);
+    box-shadow: 0 6px 20px var(--accent-glow);
+  }
+  
+  .add-btn:active { transform: scale(0.95); }
+  
+  .add-btn:disabled {
+    background: var(--surface-hover);
+    color: var(--text-muted);
+    cursor: default;
+    transform: none;
+    box-shadow: none;
+  }
+
+  /* Queue card with voting */
+  .queue-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 16px;
+    background: var(--surface);
+    margin-bottom: 10px;
+    border: 1px solid transparent;
+    transition: all 0.2s ease;
+    animation: slideIn 0.3s ease;
+  }
+  
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(-20px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  
+  .queue-card:hover { border-color: var(--border); }
+  
+  .queue-pos {
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--text-muted);
+    width: 28px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  
+  .queue-pos.top {
+    color: var(--accent);
+    font-size: 18px;
+  }
+  
+  .queue-pos.top::after {
+    content: '👑';
+    display: block;
+    font-size: 10px;
+    margin-top: -2px;
+  }
+  
+  .vote-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    background: var(--surface-elevated);
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    padding: 8px 12px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+    color: var(--text);
+    min-width: 50px;
+  }
+  
+  .vote-btn:hover {
+    border-color: var(--accent);
+    background: rgba(0, 212, 170, 0.1);
+    transform: translateY(-2px);
+  }
+  
+  .vote-btn.voted {
+    background: rgba(0, 212, 170, 0.15);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  
+  .vote-btn .arrow {
+    font-size: 16px;
+    line-height: 1;
+    transition: transform 0.2s;
+  }
+  
+  .vote-btn:hover .arrow { transform: translateY(-2px); }
+  
+  .vote-btn .count {
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 48px 24px;
+  }
+  
+  .empty-state .icon {
+    width: 80px;
+    height: 80px;
+    background: var(--surface);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 20px;
+    font-size: 36px;
+  }
+  
+  .empty-state h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+  
+  .empty-state p {
+    font-size: 14px;
+    line-height: 1.5;
+    max-width: 260px;
+    margin: 0 auto;
+  }
+
+  /* Toast notification */
+  .toast {
+    position: fixed;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--surface-elevated);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 14px 24px;
+    font-size: 15px;
+    font-weight: 600;
+    transition: all 0.4s cubic-bezier(.34,1.56,.64,1);
+    z-index: 999;
+    white-space: nowrap;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  
+  .toast.success {
+    border-color: var(--accent);
+    background: rgba(0, 212, 170, 0.1);
+    color: var(--accent);
+  }
+  
+  .toast.error {
+    border-color: var(--error);
+    background: rgba(255, 71, 87, 0.1);
+    color: var(--error);
+  }
+
+  /* Loading spinner */
+  .spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--surface-elevated);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 40px auto;
+  }
+  
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Floating action bar */
+  .fab-container {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 16px 20px 24px;
+    background: linear-gradient(0deg, var(--bg) 0%, transparent 100%);
+    pointer-events: none;
+    z-index: 50;
+  }
+  
+  .fab {
+    max-width: 440px;
+    margin: 0 auto;
+    background: var(--surface-elevated);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    backdrop-filter: blur(20px);
+    pointer-events: auto;
+  }
+  
+  .fab-text {
+    font-size: 14px;
+    color: var(--text-secondary);
+  }
+  
+  .fab-text strong {
+    color: var(--text);
+    display: block;
+    font-size: 15px;
+    margin-bottom: 2px;
+  }
+  
+  .fab-btn {
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    padding: 10px 20px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .fab-btn:hover {
+    background: #00e6b8;
+    transform: scale(1.05);
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-brand">
+    <div class="logo">🎵</div>
+    <div class="header-text">
+      <h1>Bar Jukebox</h1>
+      <p>Pick the next song • Vote for your favorites</p>
+    </div>
+  </div>
+  <div class="search-container">
+    <div class="search-wrap">
+      <span class="search-icon">🔍</span>
+      <input class="search-input" type="text" id="searchInput" placeholder="Search for songs or artists..." autocomplete="off">
+      <button class="search-clear" id="searchClear">✕</button>
+    </div>
+  </div>
+</div>
+
+<div class="now-playing" id="nowPlaying">
+  <div class="artwork">
+    <img id="npArt" src="" alt="">
+    <div class="playing-indicator">
+      <span></span>
+      <span></span>
+      <span></span>
+    </div>
+  </div>
+  <div class="info">
+    <div class="label">Now Playing</div>
+    <div class="title" id="npTitle"></div>
+    <div class="artist" id="npArtist"></div>
+  </div>
+</div>
+
+<div id="searchResults"></div>
+
+<div class="section" id="queueSection">
+  <div class="section-header">
+    <div class="section-title">Up Next <span class="count" id="queueCount">0</span></div>
+  </div>
+  <div id="queueList">
+    <div class="empty-state">
+      <div class="icon">🎶</div>
+      <h3>The stage is yours</h3>
+      <p>Search for a song above to add it to the queue and get the party started!</p>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // ─── Voter ID (persisted per guest device) ───────────────────────────────
+  const voterId = (() => {
+    let id = localStorage.getItem('jukebox_voter_id');
+    if (!id) { id = 'v_' + Math.random().toString(36).slice(2, 10); localStorage.setItem('jukebox_voter_id', id); }
+    return id;
+  })();
+
+  // ─── Socket.io ───────────────────────────────────────────────────────────
+  const socket = io();
+  socket.on('queueUpdate', ({ queue, currentTrack }) => {
+    renderQueue(queue);
+    renderNowPlaying(currentTrack);
+  });
+
+  // ─── Search ──────────────────────────────────────────────────────────────
+  let searchTimeout, currentQueue = [];
+
+  const searchInput = document.getElementById('searchInput');
+  const searchClear = document.getElementById('searchClear');
+  const searchResults = document.getElementById('searchResults');
+
+  searchInput.addEventListener('input', () => {
+    const q = searchInput.value.trim();
+    searchClear.style.display = q ? 'flex' : 'none';
+    clearTimeout(searchTimeout);
+    if (!q) { searchResults.innerHTML = ''; return; }
+    searchTimeout = setTimeout(() => doSearch(q), 400);
+  });
+
+  searchClear.addEventListener('click', () => {
+    searchInput.value = '';
+    searchClear.style.display = 'none';
+    searchResults.innerHTML = '';
+    searchInput.focus();
+  });
+
+  async function doSearch(q) {
+    searchResults.innerHTML = '<div class="section"><div class="spinner"></div></div>';
+    try {
+      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+      if (res.status === 401) {
+        const data = await res.json();
+        searchResults.innerHTML = `<div class="section"><div class="empty-state"><div class="icon">🔌</div><h3>Spotify not connected</h3><p>${data.error || 'The jukebox host needs to connect Spotify Premium on the Host page.'}</p></div></div>`;
+        return;
+      }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Search failed: ' + res.status);
+      }
+      const tracks = await res.json();
+      renderSearchResults(tracks);
+    } catch (err) {
+      console.error('Search error:', err);
+      searchResults.innerHTML = `<div class="section"><div class="empty-state"><div class="icon">⚠️</div><h3>Search failed</h3><p>${err.message || 'Please check your connection and try again.'}</p></div></div>`;
+    }
+  }
+
+  function renderSearchResults(tracks) {
+    if (!tracks.length) {
+      searchResults.innerHTML = '<div class="section"><div class="empty-state"><div class="icon">🔍</div><h3>No results found</h3><p>Try searching with different keywords or check your spelling.</p></div></div>';
+      return;
+    }
+    const inQueue = new Set(currentQueue.map(i => i.trackId));
+    searchResults.innerHTML = `
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">Search Results <span class="count">${tracks.length}</span></div>
+        </div>
+        ${tracks.map(t => {
+          const queued = inQueue.has(t.trackId);
+          return `<div class="track-card">
+            <img src="${t.albumArt || ''}" alt="" onerror="this.style.background='#333'">
+            <div class="track-info">
+              <div class="track-title">${esc(t.title)}</div>
+              <div class="track-artist">${esc(t.artist)}</div>
+            </div>
+            ${queued ? `<span class="track-badge badge-inqueue">✓ Added</span>` :
+              `<button class="add-btn" onclick="addToQueue(${JSON.stringify(t).replace(/"/g, '&quot;')})" title="Add to queue">+</button>`}
+          </div>`;
+        }).join('')}
+      </div>`;
+  }
+
+  // ─── Add to queue ────────────────────────────────────────────────────────
+  async function addToQueue(track) {
+    try {
+      const res = await fetch('/api/queue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...track, voterId }),
+      });
+      const data = await res.json();
+      if (res.status === 409) return showToast('Already in queue!', 'error');
+      if (!res.ok) return showToast(data.error || 'Failed to add', 'error');
+      showToast(`✓ Added "${track.title}"`, 'success');
+      // Re-run search to update the "in queue" status
+      const currentQuery = searchInput.value.trim();
+      if (currentQuery) {
+        setTimeout(() => doSearch(currentQuery), 300);
+      }
+    } catch (err) {
+      console.error('Add error:', err);
+      showToast('Connection error', 'error');
+    }
+  }
+
+  // ─── Vote ────────────────────────────────────────────────────────────────
+  async function vote(id) {
+    try {
+      const res = await fetch(`/api/vote/${id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ voterId }),
+      });
+      const data = await res.json();
+      if (res.status === 409) return showToast('You already voted!', 'error');
+      if (!res.ok) return showToast(data.error || 'Vote failed', 'error');
+      showToast('👍 Vote counted!', 'success');
+    } catch {
+      showToast('Connection error', 'error');
+    }
+  }
+
+  // ─── Render Queue ────────────────────────────────────────────────────────
+  function renderQueue(queue) {
+    currentQueue = queue;
+    document.getElementById('queueCount').textContent = queue.length;
+    const el = document.getElementById('queueList');
+    if (!queue.length) {
+      el.innerHTML = '<div class="empty-state"><div class="icon">🎶</div><h3>The stage is yours</h3><p>Search for a song above to add it to the queue and get the party started!</p></div>';
+      return;
+    }
+    el.innerHTML = queue.map((item, i) => {
+      const hasVoted = item.voters.includes(voterId);
+      return `<div class="queue-card">
+        <div class="queue-pos ${i === 0 ? 'top' : ''}">${i === 0 ? '1' : i + 1}</div>
+        <img src="${item.albumArt || ''}" alt="" style="width:56px;height:56px;border-radius:10px;object-fit:cover;flex-shrink:0;background:#333;box-shadow:0 2px 8px rgba(0,0,0,0.2)">
+        <div class="track-info" style="flex:1;min-width:0">
+          <div class="track-title">${esc(item.title)}</div>
+          <div class="track-artist">${esc(item.artist)}</div>
+        </div>
+        <button class="vote-btn ${hasVoted ? 'voted' : ''}" onclick="vote('${item.id}')" ${hasVoted ? 'disabled' : ''}>
+          <span class="arrow">▲</span>
+          <span class="count">${item.votes}</span>
+        </button>
+      </div>`;
+    }).join('');
+  }
+
+  // ─── Render Now Playing ──────────────────────────────────────────────────
+  function renderNowPlaying(track) {
+    const el = document.getElementById('nowPlaying');
+    if (!track) { el.classList.remove('visible'); return; }
+    el.classList.add('visible');
+    document.getElementById('npTitle').textContent = track.title;
+    document.getElementById('npArtist').textContent = track.artist;
+    document.getElementById('npArt').src = track.albumArt || '';
+  }
+
+  // ─── Toast ───────────────────────────────────────────────────────────────
+  function showToast(msg, type = 'success') {
+    const t = document.getElementById('toast');
+    t.innerHTML = type === 'success' ? '✓ ' + msg : '✕ ' + msg;
+    t.className = `toast ${type} show`;
+    setTimeout(() => t.classList.remove('show'), 3000);
+  }
+
+  function esc(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+</script>
+</body>
+</html>
