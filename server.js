@@ -395,7 +395,7 @@ app.get('/api/suggestions', async (req, res) => {
 
     const candidates = shuffleArray(FALLBACK_SONGS)
       .filter(song => !queueTrackIds.has(song.trackId))
-      .slice(0, 6)
+      .slice(0, 8)
       .map(song => ({
         trackId: song.trackId,
         title: song.title,
