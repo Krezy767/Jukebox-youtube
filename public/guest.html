@@ -405,13 +405,63 @@
     display: flex;
     gap: 8px;
     overflow-x: auto;
+    overflow-y: visible;
     overscroll-behavior-x: contain;
-    scroll-snap-type: x proximity;
+    padding-top: 4px;
     padding-bottom: 4px;
+  }
+
+  .suggested-grid.spring-return {
+    transition: transform 420ms cubic-bezier(0.68, -0.6, 0.32, 1.6);
   }
 
   .suggested-grid::-webkit-scrollbar {
     display: none;
+  }
+
+  #suggestedList {
+    position: relative;
+    overflow: visible;
+  }
+
+  #suggestedList::before,
+  #suggestedList::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    width: 24px;
+    height: calc(100% - 4px);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    z-index: 2;
+  }
+
+  #suggestedList::before {
+    left: 0;
+    background: linear-gradient(90deg, rgba(18, 18, 26, 0.84) 0%, rgba(10, 10, 15, 0) 100%);
+  }
+
+  #suggestedList::after {
+    right: 0;
+    background: linear-gradient(90deg, rgba(10, 10, 15, 0) 0%, rgba(18, 18, 26, 0.84) 100%);
+  }
+
+  #suggestedList.has-left-fade::before {
+    opacity: 1;
+  }
+
+  #suggestedList.has-right-fade::after {
+    opacity: 1;
+  }
+
+  #suggestedList {
+    padding-top: 8px;
+  }
+
+  #suggestedSection {
+    padding-top: 8px;
+    margin-top: 16px;
   }
 
   .suggested-card {
@@ -425,7 +475,6 @@
     min-width: 0;
     cursor: pointer;
     transition: all 0.18s ease;
-    scroll-snap-align: start;
     flex: 0 0 31%;
   }
 
@@ -441,13 +490,15 @@
 
   .suggested-card.queued {
     cursor: default;
-    opacity: 0.7;
+    opacity: 0.48;
+    background: #101017;
+    border-color: #232334;
   }
 
   .suggested-card.queued:hover {
     transform: none;
-    border-color: var(--border);
-    background: var(--surface);
+    border-color: #232334;
+    background: #101017;
   }
 
   .suggested-card img {
@@ -909,6 +960,7 @@
   let searchTimeout, currentQueue = [];
   let toastTimeout = null;
   let suggestionsHintTimers = [];
+  let suggestionsHintFrame = null;
 
   const searchInput = document.getElementById('searchInput');
   const searchClear = document.getElementById('searchClear');
@@ -995,6 +1047,38 @@
   function stopSuggestionsAutoScroll() {
     suggestionsHintTimers.forEach(clearTimeout);
     suggestionsHintTimers = [];
+    if (suggestionsHintFrame) {
+      cancelAnimationFrame(suggestionsHintFrame);
+      suggestionsHintFrame = null;
+    }
+  }
+
+  function animateSuggestionsScroll(rail, targetLeft, durationMs) {
+    return new Promise(resolve => {
+      const startLeft = rail.scrollLeft;
+      const delta = targetLeft - startLeft;
+      const startAt = performance.now();
+
+      const step = now => {
+        const progress = Math.min(1, (now - startAt) / durationMs);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        rail.scrollLeft = startLeft + (delta * eased);
+        if (progress < 1) {
+          suggestionsHintFrame = requestAnimationFrame(step);
+        } else {
+          suggestionsHintFrame = null;
+          resolve();
+        }
+      };
+
+      suggestionsHintFrame = requestAnimationFrame(step);
+    });
+  }
+
+  function animateSuggestionsSpringBack(rail, targetLeft, durationMs) {
+    return new Promise(resolve => {
+      animateSuggestionsScroll(rail, targetLeft, durationMs).then(resolve);
+    });
   }
 
   function setupSuggestionsAutoScroll() {
@@ -1002,9 +1086,6 @@
     const rail = document.querySelector('#suggestedList .suggested-grid');
     if (!rail) return;
     if (rail.scrollWidth <= rail.clientWidth + 4) return;
-
-    const maxScroll = Math.max(0, rail.scrollWidth - rail.clientWidth);
-    const hintOffset = Math.min(maxScroll, Math.max(24, rail.clientWidth * 0.7));
 
     const cancelAndReset = () => {
       stopSuggestionsAutoScroll();
@@ -1014,18 +1095,40 @@
     rail.addEventListener('pointerdown', cancelAndReset, { once: true });
 
     suggestionsHintTimers.push(setTimeout(() => {
-      rail.scrollTo({ left: hintOffset, behavior: 'smooth' });
-    }, 900));
+      const firstCard = rail.querySelector('.suggested-card');
+      const cardWidth = firstCard ? firstCard.getBoundingClientRect().width : rail.clientWidth / 3;
+      const gap = 8;
+      const hintOffset = Math.min(
+        Math.max(0, rail.scrollWidth - rail.clientWidth),
+        Math.max(10, (cardWidth * 0.25) + gap)
+      );
 
-    suggestionsHintTimers.push(setTimeout(() => {
-      rail.scrollTo({ left: 0, behavior: 'smooth' });
-    }, 2800));
+      (async () => {
+        await animateSuggestionsScroll(rail, hintOffset, 260);
+        await animateSuggestionsSpringBack(rail, 0, 180);
+        await animateSuggestionsScroll(rail, Math.min(hintOffset * 0.11, 9), 120);
+        await animateSuggestionsSpringBack(rail, 0, 120);
+        await animateSuggestionsScroll(rail, Math.min(hintOffset * 0.06, 5), 95);
+        await animateSuggestionsSpringBack(rail, 0, 95);
+        suggestionsHintFrame = null;
+      })().catch(() => {});
+    }, 1000));
+  }
+
+  function updateSuggestedFades() {
+    const container = document.getElementById('suggestedList');
+    const rail = container?.querySelector('.suggested-grid');
+    if (!container || !rail) return;
+    const maxScroll = Math.max(0, rail.scrollWidth - rail.clientWidth);
+    container.classList.toggle('has-left-fade', rail.scrollLeft > 4);
+    container.classList.toggle('has-right-fade', maxScroll - rail.scrollLeft > 4);
   }
 
   function renderSuggestions(tracks) {
     const inQueue = new Set(currentQueue.map(i => i.trackId));
     const el = document.getElementById('suggestedList');
     if (!tracks.length) {
+      el.classList.remove('has-left-fade', 'has-right-fade');
       el.innerHTML = '<div class="empty-state"><div class="icon">✨</div><h3>No suggestions right now</h3><p>Use search above to find the song you want.</p></div>';
       return;
     }
@@ -1041,7 +1144,14 @@
         </div>`;
       }).join('')}
     </div>`;
-    requestAnimationFrame(() => setupSuggestionsAutoScroll());
+    requestAnimationFrame(() => {
+      const rail = el.querySelector('.suggested-grid');
+      if (rail) {
+        rail.addEventListener('scroll', updateSuggestedFades, { passive: true });
+      }
+      updateSuggestedFades();
+      setupSuggestionsAutoScroll();
+    });
   }
 
   // ─── Add to queue ────────────────────────────────────────────────────────
