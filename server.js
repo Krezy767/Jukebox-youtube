@@ -387,6 +387,54 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
+app.get('/api/suggestions', async (req, res) => {
+  try {
+    const queueTrackIds = new Set(queue.map(item => item.trackId));
+    if (currentTrack?.trackId) queueTrackIds.add(currentTrack.trackId);
+    if (targetTrack?.trackId) queueTrackIds.add(targetTrack.trackId);
+
+    const candidates = shuffleArray(FALLBACK_SONGS)
+      .filter(song => !queueTrackIds.has(song.trackId))
+      .slice(0, 6)
+      .map(song => ({
+        trackId: song.trackId,
+        title: song.title,
+        artist: song.artist,
+      }));
+
+    const enriched = [];
+    for (const song of candidates) {
+      const fallback = {
+        id: 'suggestion_' + uuidv4(),
+        trackId: song.trackId,
+        title: song.title,
+        artist: song.artist,
+        album: 'Autoplay',
+        albumArt: null,
+        explicit: false,
+        votes: 0,
+        voters: new Set(),
+        addedAt: Date.now(),
+        isFallback: true,
+      };
+      await fillFallbackMetadata(fallback);
+      enriched.push({
+        trackId: fallback.trackId,
+        title: fallback.title,
+        artist: fallback.artist,
+        album: fallback.album,
+        albumArt: fallback.albumArt,
+        explicit: false,
+      });
+    }
+
+    res.json(enriched);
+  } catch (err) {
+    console.error('Suggestions error:', err.message);
+    res.status(500).json({ error: 'Failed to load suggestions' });
+  }
+});
+
 // ─── Queue ────────────────────────────────────────────────────────────────────
 app.get('/api/queue', async (req, res) => {
   await ensureQueueHasUpcomingTrack();

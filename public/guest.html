@@ -350,6 +350,60 @@
     font-weight: 600;
   }
 
+  .suggested-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .suggested-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .suggested-card img {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    border-radius: 12px;
+    object-fit: cover;
+    background: var(--surface-hover);
+  }
+
+  .suggested-title {
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .suggested-artist {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    min-height: 31px;
+  }
+
+  .suggested-card .add-btn {
+    width: 100%;
+    height: 42px;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 700;
+  }
+
   /* Track card (search results) */
   .track-card {
     display: flex;
@@ -714,6 +768,15 @@
   </div>
 </div>
 
+<div class="section" id="suggestedSection">
+  <div class="section-header">
+    <div class="section-title">Suggested For This Bar</div>
+  </div>
+  <div id="suggestedList">
+    <div class="spinner"></div>
+  </div>
+</div>
+
 <div id="searchResults"></div>
 
 <div class="section" id="queueSection">
@@ -752,6 +815,8 @@
   const searchInput = document.getElementById('searchInput');
   const searchClear = document.getElementById('searchClear');
   const searchResults = document.getElementById('searchResults');
+
+  loadSuggestions();
 
   searchInput.addEventListener('input', () => {
     const q = searchInput.value.trim();
@@ -815,6 +880,42 @@
       </div>`;
   }
 
+  async function loadSuggestions() {
+    const el = document.getElementById('suggestedList');
+    try {
+      const res = await fetch('/api/suggestions');
+      if (!res.ok) throw new Error('Failed to load suggestions');
+      const tracks = await res.json();
+      renderSuggestions(tracks);
+    } catch (err) {
+      el.innerHTML = '<div class="empty-state"><div class="icon">✨</div><h3>No suggestions right now</h3><p>Use search above to find the song you want.</p></div>';
+    }
+  }
+
+  function renderSuggestions(tracks) {
+    const inQueue = new Set(currentQueue.map(i => i.trackId));
+    const el = document.getElementById('suggestedList');
+    if (!tracks.length) {
+      el.innerHTML = '<div class="empty-state"><div class="icon">✨</div><h3>No suggestions right now</h3><p>Use search above to find the song you want.</p></div>';
+      return;
+    }
+    el.innerHTML = `<div class="suggested-grid">
+      ${tracks.map(t => {
+        const queued = inQueue.has(t.trackId);
+        return `<div class="suggested-card">
+          <img src="${t.albumArt || ''}" alt="" onerror="this.style.background='#333'">
+          <div>
+            <div class="suggested-title">${esc(t.title)}</div>
+            <div class="suggested-artist">${esc(t.artist)}</div>
+          </div>
+          ${queued
+            ? `<button class="add-btn" disabled>✓ Added</button>`
+            : `<button class="add-btn" onclick="addToQueue(${JSON.stringify(t).replace(/"/g, '&quot;')})">+</button>`}
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
+
   // ─── Add to queue ────────────────────────────────────────────────────────
   async function addToQueue(track) {
     try {
@@ -859,6 +960,7 @@
   function renderQueue(queue) {
     currentQueue = queue;
     document.getElementById('queueCount').textContent = queue.length;
+    loadSuggestions();
     const el = document.getElementById('queueList');
     if (!queue.length) {
       el.innerHTML = '<div class="empty-state"><div class="icon">🎶</div><h3>The stage is yours</h3><p>Search for a song above to add it to the queue and get the party started!</p></div>';
