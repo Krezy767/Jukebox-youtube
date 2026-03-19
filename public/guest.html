@@ -403,8 +403,17 @@
 
   .suggested-grid {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 31%);
     gap: 8px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    padding-bottom: 4px;
+  }
+
+  .suggested-grid::-webkit-scrollbar {
+    display: none;
   }
 
   .suggested-card {
@@ -418,6 +427,7 @@
     min-width: 0;
     cursor: pointer;
     transition: all 0.18s ease;
+    scroll-snap-align: start;
   }
 
   .suggested-card:hover {
@@ -473,20 +483,8 @@
   .suggested-meta {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
     min-width: 0;
-  }
-
-  .suggested-state {
-    font-size: 10px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    color: var(--accent);
-  }
-
-  .suggested-card.queued .suggested-state {
-    color: var(--text-muted);
   }
 
   .section.hidden {
@@ -1001,7 +999,6 @@
           <div class="suggested-meta">
             <div class="suggested-title">${esc(t.title)}</div>
             <div class="suggested-artist">${esc(t.artist)}</div>
-            <div class="suggested-state">${queued ? 'Already queued' : 'Tap to add'}</div>
           </div>
         </div>`;
       }).join('')}
