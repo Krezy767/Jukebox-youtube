@@ -416,6 +416,29 @@
     flex-direction: column;
     gap: 8px;
     min-width: 0;
+    cursor: pointer;
+    transition: all 0.18s ease;
+  }
+
+  .suggested-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--accent);
+    background: var(--surface-elevated);
+  }
+
+  .suggested-card:active {
+    transform: scale(0.98);
+  }
+
+  .suggested-card.queued {
+    cursor: default;
+    opacity: 0.7;
+  }
+
+  .suggested-card.queued:hover {
+    transform: none;
+    border-color: var(--border);
+    background: var(--surface);
   }
 
   .suggested-card img {
@@ -447,12 +470,23 @@
     min-height: 28px;
   }
 
-  .suggested-card .add-btn {
-    width: 100%;
-    height: 34px;
-    border-radius: 12px;
-    font-size: 13px;
+  .suggested-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .suggested-state {
+    font-size: 10px;
     font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--accent);
+  }
+
+  .suggested-card.queued .suggested-state {
+    color: var(--text-muted);
   }
 
   .section.hidden {
@@ -962,15 +996,13 @@
     el.innerHTML = `<div class="suggested-grid">
       ${tracks.map(t => {
         const queued = inQueue.has(t.trackId);
-        return `<div class="suggested-card">
+        return `<div class="suggested-card ${queued ? 'queued' : ''}" ${queued ? '' : `onclick="addToQueue(${JSON.stringify(t).replace(/"/g, '&quot;')})"`}>
           <img src="${t.albumArt || ''}" alt="" onerror="this.style.background='#333'">
-          <div>
+          <div class="suggested-meta">
             <div class="suggested-title">${esc(t.title)}</div>
             <div class="suggested-artist">${esc(t.artist)}</div>
+            <div class="suggested-state">${queued ? 'Already queued' : 'Tap to add'}</div>
           </div>
-          ${queued
-            ? `<button class="add-btn" disabled>✓ Added</button>`
-            : `<button class="add-btn" onclick="addToQueue(${JSON.stringify(t).replace(/"/g, '&quot;')})">+</button>`}
         </div>`;
       }).join('')}
     </div>`;
