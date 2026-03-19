@@ -1013,23 +1013,24 @@
 
     rail.addEventListener('touchstart', pauseAndResume, { passive: true });
     rail.addEventListener('pointerdown', pauseAndResume);
-    rail.addEventListener('scroll', pauseAndResume, { passive: true });
 
-    suggestionsAutoScrollTimer = setInterval(() => {
-      if (!document.body.contains(rail)) {
-        stopSuggestionsAutoScroll();
-        return;
-      }
-      const maxScroll = Math.max(0, rail.scrollWidth - rail.clientWidth);
-      if (maxScroll <= 4) return;
-      const nextLeft = rail.scrollLeft + (0.35 * suggestionsAutoScrollDirection);
-      rail.scrollLeft = nextLeft;
-      if (rail.scrollLeft >= maxScroll - 2) {
-        suggestionsAutoScrollDirection = -1;
-      } else if (rail.scrollLeft <= 2) {
-        suggestionsAutoScrollDirection = 1;
-      }
-    }, 32);
+    suggestionsAutoScrollResumeTimer = setTimeout(() => {
+      suggestionsAutoScrollTimer = setInterval(() => {
+        if (!document.body.contains(rail)) {
+          stopSuggestionsAutoScroll();
+          return;
+        }
+        const maxScroll = Math.max(0, rail.scrollWidth - rail.clientWidth);
+        if (maxScroll <= 4) return;
+        const nextLeft = rail.scrollLeft + (0.55 * suggestionsAutoScrollDirection);
+        rail.scrollLeft = nextLeft;
+        if (rail.scrollLeft >= maxScroll - 2) {
+          suggestionsAutoScrollDirection = -1;
+        } else if (rail.scrollLeft <= 2) {
+          suggestionsAutoScrollDirection = 1;
+        }
+      }, 32);
+    }, 900);
   }
 
   function renderSuggestions(tracks) {
