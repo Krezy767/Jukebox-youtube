@@ -900,6 +900,10 @@
 
   // ─── Search ──────────────────────────────────────────────────────────────
   let searchTimeout, currentQueue = [];
+  let toastTimeout = null;
+  let suggestionsAutoScrollTimer = null;
+  let suggestionsAutoScrollResumeTimer = null;
+  let suggestionsAutoScrollDirection = 1;
 
   const searchInput = document.getElementById('searchInput');
   const searchClear = document.getElementById('searchClear');
@@ -983,6 +987,51 @@
     }
   }
 
+  function stopSuggestionsAutoScroll() {
+    if (suggestionsAutoScrollTimer) {
+      clearInterval(suggestionsAutoScrollTimer);
+      suggestionsAutoScrollTimer = null;
+    }
+    if (suggestionsAutoScrollResumeTimer) {
+      clearTimeout(suggestionsAutoScrollResumeTimer);
+      suggestionsAutoScrollResumeTimer = null;
+    }
+  }
+
+  function setupSuggestionsAutoScroll() {
+    stopSuggestionsAutoScroll();
+    const rail = document.querySelector('#suggestedList .suggested-grid');
+    if (!rail) return;
+    if (rail.scrollWidth <= rail.clientWidth + 4) return;
+
+    const pauseAndResume = () => {
+      stopSuggestionsAutoScroll();
+      suggestionsAutoScrollResumeTimer = setTimeout(() => {
+        setupSuggestionsAutoScroll();
+      }, 2200);
+    };
+
+    rail.addEventListener('touchstart', pauseAndResume, { passive: true });
+    rail.addEventListener('pointerdown', pauseAndResume);
+    rail.addEventListener('scroll', pauseAndResume, { passive: true });
+
+    suggestionsAutoScrollTimer = setInterval(() => {
+      if (!document.body.contains(rail)) {
+        stopSuggestionsAutoScroll();
+        return;
+      }
+      const maxScroll = Math.max(0, rail.scrollWidth - rail.clientWidth);
+      if (maxScroll <= 4) return;
+      const nextLeft = rail.scrollLeft + (0.35 * suggestionsAutoScrollDirection);
+      rail.scrollLeft = nextLeft;
+      if (rail.scrollLeft >= maxScroll - 2) {
+        suggestionsAutoScrollDirection = -1;
+      } else if (rail.scrollLeft <= 2) {
+        suggestionsAutoScrollDirection = 1;
+      }
+    }, 32);
+  }
+
   function renderSuggestions(tracks) {
     const inQueue = new Set(currentQueue.map(i => i.trackId));
     const el = document.getElementById('suggestedList');
@@ -1002,6 +1051,7 @@
         </div>`;
       }).join('')}
     </div>`;
+    requestAnimationFrame(() => setupSuggestionsAutoScroll());
   }
 
   // ─── Add to queue ────────────────────────────────────────────────────────
@@ -1101,9 +1151,20 @@
   // ─── Toast ───────────────────────────────────────────────────────────────
   function showToast(msg, type = 'success') {
     const t = document.getElementById('toast');
+    if (toastTimeout) {
+      clearTimeout(toastTimeout);
+      toastTimeout = null;
+    }
+    t.classList.remove('show', 'success', 'error');
     t.innerHTML = type === 'success' ? '✓ ' + msg : '✕ ' + msg;
-    t.className = `toast ${type} show`;
-    setTimeout(() => t.classList.remove('show'), 3000);
+    t.classList.add('toast', type);
+    requestAnimationFrame(() => {
+      t.classList.add('show');
+    });
+    toastTimeout = setTimeout(() => {
+      t.classList.remove('show');
+      toastTimeout = null;
+    }, 3000);
   }
 
   function esc(str) {
