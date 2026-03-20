@@ -25,36 +25,9 @@ let currentTrack = null;
 let targetTrack = null;
 let deviceId = null;   // Spotify Web Playback SDK device ID from host page
 let lastTrackChange = 0; // Timestamp of last track change (debounce protection)
-let fallbackPool = []; // Shuffled deck — all 20 songs play before any repeats
 let activeHost = { socketId: null, hostId: null };
-const invalidFallbackTrackIds = new Set();
-const fallbackTrackIdOverrides = new Map();
-const fallbackSearchCache = new Map();
 
-// ─── Autoplay Fallback Songs (played when queue is empty) ─────────────────────
-// Popular bar-friendly songs that play automatically when no one has requested anything
-const FALLBACK_SONGS = [
-  { trackId: '4uLU6hMCjMI75M1A2tKUQC', title: 'One More Time', artist: 'Daft Punk' },
-  { trackId: '1jeTnPoEv9gTL8bMlMJJoS', title: 'Billie Jean', artist: 'Michael Jackson' },
-  { trackId: '4kflIGfjdZJW4ot2ioixTB', title: 'Sweet Child O\' Mine', artist: 'Guns N\' Roses' },
-  { trackId: '3MrRksZSC9tRZXhRdl4E2j', title: 'Hotel California', artist: 'Eagles' },
-  { trackId: '0gxyHStUsqpMadRVVKDiRc', title: 'Uptown Funk', artist: 'Mark Ronson ft. Bruno Mars' },
-  { trackId: '1lCRw5FEZ1gPDNPzy1K4zW', title: 'Bohemian Rhapsody', artist: 'Queen' },
-  { trackId: '2gNfxysfBRfljnOhVMISJ2', title: 'Mr. Brightside', artist: 'The Killers' },
-  { trackId: '2QjOHCTQ1Jl3zawyYOpxh6', title: 'Sweet Dreams', artist: 'Eurythmics' },
-  { trackId: '5zH710lFSLtkHbMkslLDWR', title: 'Take On Me', artist: 'a-ha' },
-  { trackId: '2takcwOaAZWiXQijPHIx7B', title: 'Wonderwall', artist: 'Oasis' },
-  { trackId: '4J2MlFrZLrGJfxBIEWgqGg', title: 'I Wanna Dance with Somebody', artist: 'Whitney Houston' },
-  { trackId: '0hCB0YR03f6AmQaXbsxcIg', title: 'Livin\' on a Prayer', artist: 'Bon Jovi' },
-  { trackId: '7r6a9DJms4Xn3ftSSL9jYr', title: 'Don\'t Stop Believin\'', artist: 'Journey' },
-  { trackId: '4pbJqGIASGpr0MO18lA4KO', title: 'Africa', artist: 'Toto' },
-  { trackId: '0VjIjW4GlUfm5Mv8vyyLtU', title: 'Shape of You', artist: 'Ed Sheeran' },
-  { trackId: '6u0o6ZBfKWkC9hY4hP363L', title: 'Dancing Queen', artist: 'ABBA' },
-  { trackId: '1Je1IMUlBXcx14E7uSW1M8', title: 'September', artist: 'Earth, Wind & Fire' },
-  { trackId: '6SpLc7EXZpmR4Qd4EtiH6A', title: 'Hey Ya!', artist: 'OutKast' },
-  { trackId: '7KXjTSCq5nL1LoYtL7XAwS', title: 'HUMBLE.', artist: 'Kendrick Lamar' },
-  { trackId: '7qiZfU4dY9lQabv8lsDsK7', title: 'Blinding Lights', artist: 'The Weeknd' },
-];
+const SEED_GENRES = ['pop', 'rock', 'dance', 'hip-hop', 'indie', 'party'];
 
 function shuffleArray(arr) {
   const out = [...arr];
@@ -65,24 +38,41 @@ function shuffleArray(arr) {
   return out;
 }
 
-function getRandomFallbackSong() {
-  if (fallbackPool.length === 0) {
-    fallbackPool = shuffleArray(FALLBACK_SONGS);
+// Fetch recommendations from Spotify seeded by current track or random genres
+async function fetchSpotifyRecommendations(limit = 1) {
+  const token = await getToken();
+  if (!token) return null;
+
+  const excludeIds = new Set(
+    [...queue.map(t => t.trackId), currentTrack?.trackId, targetTrack?.trackId].filter(Boolean)
+  );
+
+  const seedTrackId = currentTrack?.trackId || targetTrack?.trackId;
+  const fetchLimit = Math.min(limit + excludeIds.size, 100);
+  const params = { limit: fetchLimit };
+  if (seedTrackId) {
+    params.seed_tracks = seedTrackId;
+  } else {
+    params.seed_genres = shuffleArray(SEED_GENRES).slice(0, 2).join(',');
   }
-  const song = fallbackPool.shift();
-  return {
-    id: 'fallback_' + uuidv4(),
-    trackId: song.trackId,
-    title: song.title,
-    artist: song.artist,
-    album: 'Autoplay',
-    albumArt: null,
-    explicit: false,
-    votes: 0,
-    voters: new Set(),
-    addedAt: Date.now(),
-    isFallback: true, // Mark as autoplay song
-  };
+
+  const { data } = await axios.get('https://api.spotify.com/v1/recommendations', {
+    headers: { Authorization: `Bearer ${token}` },
+    params,
+  });
+
+  return data.tracks
+    .filter(t => !excludeIds.has(t.id) && !(BLOCK_EXPLICIT && t.explicit))
+    .slice(0, limit)
+    .map(t => ({
+      trackId: t.id,
+      title: t.name,
+      artist: t.artists.map(a => a.name).join(', '),
+      album: t.album.name,
+      albumArt: t.album.images[1]?.url || t.album.images[0]?.url || null,
+      explicit: t.explicit,
+      uri: t.uri,
+    }));
 }
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -178,108 +168,44 @@ function sanitizeTrack(track) {
   };
 }
 
-async function fillFallbackMetadata(track) {
-  if (!track?.isFallback || track.albumArt) return;
-
-  const fallbackCacheKey = `${track.title}::${track.artist}`;
-  const cachedFallback = fallbackSearchCache.get(fallbackCacheKey);
-  if (cachedFallback) {
-    track.trackId = cachedFallback.trackId;
-    track.title = cachedFallback.title;
-    track.artist = cachedFallback.artist;
-    track.album = cachedFallback.album;
-    track.albumArt = cachedFallback.albumArt;
-    return;
-  }
-
-  try {
-    const token = await getClientCredentialsToken();
-    if (token) {
-      const query = `track:${track.title} artist:${track.artist}`;
-      const { data } = await axios.get(
-        `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=1`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      const match = data?.tracks?.items?.[0];
-      if (match?.id) {
-        const resolvedFallback = {
-          trackId: match.id,
-          title: match.name,
-          artist: match.artists.map(a => a.name).join(', '),
-          album: match.album.name,
-          albumArt: match.album.images[1]?.url || match.album.images[0]?.url || null,
-        };
-        fallbackSearchCache.set(fallbackCacheKey, resolvedFallback);
-        track.trackId = resolvedFallback.trackId;
-        track.title = resolvedFallback.title;
-        track.artist = resolvedFallback.artist;
-        track.album = resolvedFallback.album;
-        track.albumArt = resolvedFallback.albumArt;
-        return;
-      }
-    }
-  } catch (err) {
-    console.log('Fallback search resolution failed:', track.title, '-', err.message);
-  }
-
-  const replacementTrackId = fallbackTrackIdOverrides.get(track.trackId);
-  if (replacementTrackId) {
-    track.trackId = replacementTrackId;
-  }
-  if (invalidFallbackTrackIds.has(track.trackId)) return;
-
-  try {
-    const token = await getClientCredentialsToken();
-    if (!token) return;
-    const { data } = await axios.get(`https://api.spotify.com/v1/tracks/${track.trackId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    track.albumArt = data.album.images[1]?.url || data.album.images[0]?.url || null;
-    track.album = data.album.name;
-  } catch (err) {
-    if (err.response?.status === 404) {
-      try {
-        const token = await getClientCredentialsToken();
-        if (token) {
-          const query = `track:${track.title} artist:${track.artist}`;
-          const { data } = await axios.get(
-            `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=1`,
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-          const match = data?.tracks?.items?.[0];
-          if (match?.id) {
-            fallbackTrackIdOverrides.set(track.trackId, match.id);
-            track.trackId = match.id;
-            track.albumArt = match.album.images[1]?.url || match.album.images[0]?.url || null;
-            track.album = match.album.name;
-            console.log(`Updated fallback track ID: ${track.title} -> ${match.id}`);
-            return;
-          }
-        }
-      } catch (searchErr) {
-        console.log('Fallback track repair failed:', track.title, '-', searchErr.message);
-      }
-    }
-    if (err.response?.status === 404) {
-      invalidFallbackTrackIds.add(track.trackId);
-    }
-    console.log(`Could not fetch album art for fallback: ${track.title} (${track.trackId}) - ${err.message}`);
-  }
-}
-
 async function ensureQueueHasUpcomingTrack() {
   if (queue.length > 0) return false;
-  const fallback = getRandomFallbackSong();
-  await fillFallbackMetadata(fallback);
-  queue.push(fallback);
-  return true;
+  try {
+    const tracks = await fetchSpotifyRecommendations(1);
+    if (tracks?.length) {
+      const t = tracks[0];
+      queue.push({
+        id: 'fallback_' + uuidv4(),
+        trackId: t.trackId,
+        title: t.title,
+        artist: t.artist,
+        album: t.album,
+        albumArt: t.albumArt,
+        explicit: t.explicit,
+        uri: t.uri,
+        votes: 0,
+        voters: new Set(),
+        addedAt: Date.now(),
+        isFallback: true,
+      });
+      return true;
+    }
+  } catch (err) {
+    console.error('Failed to fetch recommendation for autoplay:', err.message);
+  }
+  return false;
 }
 
+let advanceInProgress = false;
+
 async function advanceToNextTrack() {
+  if (advanceInProgress) return sanitizeTrack(currentTrack);
   const now = Date.now();
   if (now - lastTrackChange < 3000) {
     return sanitizeTrack(currentTrack);
   }
+  advanceInProgress = true;
+  try {
 
   await ensureQueueHasUpcomingTrack();
   const next = queue.shift();
@@ -289,11 +215,13 @@ async function advanceToNextTrack() {
 
   targetTrack = next;
   lastTrackChange = now;
-  await fillFallbackMetadata(next);
   await ensureQueueHasUpcomingTrack();
 
   broadcast();
   return sanitizeTrack(next);
+  } finally {
+    advanceInProgress = false;
+  }
 }
 
 // ─── Auth Routes ──────────────────────────────────────────────────────────────
@@ -389,46 +317,8 @@ app.get('/api/search', async (req, res) => {
 
 app.get('/api/suggestions', async (req, res) => {
   try {
-    const queueTrackIds = new Set(queue.map(item => item.trackId));
-    if (currentTrack?.trackId) queueTrackIds.add(currentTrack.trackId);
-    if (targetTrack?.trackId) queueTrackIds.add(targetTrack.trackId);
-
-    const candidates = shuffleArray(FALLBACK_SONGS)
-      .filter(song => !queueTrackIds.has(song.trackId))
-      .slice(0, 9)
-      .map(song => ({
-        trackId: song.trackId,
-        title: song.title,
-        artist: song.artist,
-      }));
-
-    const enriched = [];
-    for (const song of candidates) {
-      const fallback = {
-        id: 'suggestion_' + uuidv4(),
-        trackId: song.trackId,
-        title: song.title,
-        artist: song.artist,
-        album: 'Autoplay',
-        albumArt: null,
-        explicit: false,
-        votes: 0,
-        voters: new Set(),
-        addedAt: Date.now(),
-        isFallback: true,
-      };
-      await fillFallbackMetadata(fallback);
-      enriched.push({
-        trackId: fallback.trackId,
-        title: fallback.title,
-        artist: fallback.artist,
-        album: fallback.album,
-        albumArt: fallback.albumArt,
-        explicit: false,
-      });
-    }
-
-    res.json(enriched);
+    const tracks = await fetchSpotifyRecommendations(9);
+    res.json(tracks ?? []);
   } catch (err) {
     console.error('Suggestions error:', err.message);
     res.status(500).json({ error: 'Failed to load suggestions' });
@@ -680,6 +570,7 @@ setInterval(async () => {
         console.log('-> Found in queue, updating current track only');
         currentTrack = queueTrack;
         queue = queue.filter(t => t.id !== queueTrack.id);
+        await ensureQueueHasUpcomingTrack();
         broadcast();
         lastServerCorrection = Date.now();
       }

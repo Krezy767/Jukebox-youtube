@@ -1020,7 +1020,7 @@
         ${tracks.map(t => {
           const queued = inQueue.has(t.trackId);
           return `<div class="track-card">
-            <img src="${t.albumArt || ''}" alt="" onerror="this.style.background='#333'">
+            <img src="${esc(t.albumArt || '')}" alt="" onerror="this.style.background='#333'">
             <div class="track-info">
               <div class="track-title">${esc(t.title)}</div>
               <div class="track-artist">${esc(t.artist)}</div>
@@ -1136,7 +1136,7 @@
       ${tracks.map(t => {
         const queued = inQueue.has(t.trackId);
         return `<div class="suggested-card ${queued ? 'queued' : ''}" ${queued ? '' : `onclick="addToQueue(${JSON.stringify(t).replace(/"/g, '&quot;')})"`}>
-          <img src="${t.albumArt || ''}" alt="" onerror="this.style.background='#333'">
+          <img src="${esc(t.albumArt || '')}" alt="" onerror="this.style.background='#333'">
           <div class="suggested-meta">
             <div class="suggested-title">${esc(t.title)}</div>
             <div class="suggested-artist">${esc(t.artist)}</div>
@@ -1208,7 +1208,7 @@
       const hasVoted = item.voters.includes(voterId);
       return `<div class="queue-card">
         <div class="queue-pos ${i === 0 ? 'top' : ''}">${i === 0 ? '1' : i + 1}</div>
-        <img src="${item.albumArt || ''}" alt="" style="width:56px;height:56px;border-radius:10px;object-fit:cover;flex-shrink:0;background:#333;box-shadow:0 2px 8px rgba(0,0,0,0.2)">
+        <img src="${esc(item.albumArt || '')}" alt="" style="width:56px;height:56px;border-radius:10px;object-fit:cover;flex-shrink:0;background:#333;box-shadow:0 2px 8px rgba(0,0,0,0.2)">
         <div class="track-info" style="flex:1;min-width:0">
           <div class="track-title">${esc(item.title)}</div>
           <div class="track-artist">${esc(item.artist)}</div>
