@@ -27,7 +27,7 @@ let deviceId = null;   // Spotify Web Playback SDK device ID from host page
 let lastTrackChange = 0; // Timestamp of last track change (debounce protection)
 let activeHost = { socketId: null, hostId: null };
 
-const SEED_GENRES = ['pop', 'rock', 'dance', 'hip-hop', 'indie', 'party'];
+const SEED_GENRES = ['pop', 'rock', 'dance', 'hip-hop', 'indie', 'electronic'];
 
 function shuffleArray(arr) {
   const out = [...arr];
