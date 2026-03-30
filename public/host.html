@@ -543,7 +543,7 @@
   }
 
   function esc(s) {
-    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
   function trackUri(track) {
@@ -741,7 +741,7 @@
     el.innerHTML = queue.slice(0, 5).map((item, i) => `
       <div class="queue-item">
         <span style="font-size:12px;font-weight:700;color:${i === 0 ? '#1db954' : '#555'};width:16px">${i + 1}</span>
-        <img src="${item.albumArt || ''}" alt="">
+        <img src="${esc(item.albumArt || '')}" alt="">
         <div>
           <div class="title">${esc(item.title)}</div>
           <div class="artist">${esc(item.artist)}</div>
