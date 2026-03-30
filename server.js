@@ -26,8 +26,18 @@ let targetTrack = null;
 let deviceId = null;   // Spotify Web Playback SDK device ID from host page
 let lastTrackChange = 0; // Timestamp of last track change (debounce protection)
 let activeHost = { socketId: null, hostId: null };
+let recentlyPlayed = new Map(); // trackId -> timestamp of when it was played
 
-const SEED_GENRES = ['pop', 'rock', 'dance', 'hip-hop', 'indie', 'electronic'];
+const SEED_GENRES = ['pop', 'rock', 'electronic', 'hip-hop', 'jazz', 'ambient'];
+
+const GENRE_PLAYLISTS = {
+  'pop': '37i9dQZF1DWVlLVXKTOAYa',           // Pop Right Now
+  'rock': '37i9dQZF1DWZryfp6NSvtz',          // All New Rock
+  'electronic': '37i9dQZF1DX0BcQWzuB7ZO',   // Dance Hits
+  'hip-hop': '37i9dQZF1DX48TTZL62Yht',       // Hip-Hop Favourites
+  'jazz': '37i9dQZF1DWV7EzJMK2FUI',          // Jazz in the Background
+  'ambient': '37i9dQZF1DX9c7yCloFHHL'        // New Ambient
+};
 
 function shuffleArray(arr) {
   const out = [...arr];
@@ -40,39 +50,52 @@ function shuffleArray(arr) {
 
 // Fetch recommendations from Spotify seeded by current track or random genres
 async function fetchSpotifyRecommendations(limit = 1) {
-  const token = await getToken();
-  if (!token) return null;
+  try {
+    const now = Date.now();
+    const thirtyMinutesAgo = now - (30 * 60 * 1000);
 
-  const excludeIds = new Set(
-    [...queue.map(t => t.trackId), currentTrack?.trackId, targetTrack?.trackId].filter(Boolean)
-  );
+    // Clean up old entries
+    for (const [trackId, timestamp] of recentlyPlayed) {
+      if (timestamp < thirtyMinutesAgo) {
+        recentlyPlayed.delete(trackId);
+      }
+    }
 
-  const seedTrackId = currentTrack?.trackId || targetTrack?.trackId;
-  const fetchLimit = Math.min(limit + excludeIds.size, 100);
-  const params = { limit: fetchLimit };
-  if (seedTrackId) {
-    params.seed_tracks = seedTrackId;
-  } else {
-    params.seed_genres = shuffleArray(SEED_GENRES).slice(0, 2).join(',');
+    const excludeIds = new Set(
+      [...queue.map(t => t.trackId), currentTrack?.trackId, targetTrack?.trackId].filter(Boolean)
+    );
+
+    // Also exclude recently played (within 30 minutes)
+    for (const trackId of recentlyPlayed.keys()) {
+      excludeIds.add(trackId);
+    }
+
+    const genres = shuffleArray(SEED_GENRES).slice(0, 1)[0];
+    const query = `genre:${genres}`;
+    const ccToken = await getClientCredentialsToken();
+    const fetchLimit = Math.min(limit + excludeIds.size, 50);
+
+    const { data } = await axios.get('https://api.spotify.com/v1/search', {
+      headers: { Authorization: `Bearer ${ccToken}` },
+      params: { q: query, type: 'track', limit: fetchLimit },
+    });
+
+    return data.tracks.items
+      .filter(t => !excludeIds.has(t.id) && !(BLOCK_EXPLICIT && t.explicit))
+      .slice(0, limit)
+      .map(t => ({
+        trackId: t.id,
+        title: t.name,
+        artist: t.artists.map(a => a.name).join(', '),
+        album: t.album.name,
+        albumArt: t.album.images[1]?.url || t.album.images[0]?.url || null,
+        explicit: t.explicit,
+        uri: t.uri,
+      }));
+  } catch (err) {
+    console.error('Failed to fetch recommendations:', err.message);
+    return null;
   }
-
-  const { data } = await axios.get('https://api.spotify.com/v1/recommendations', {
-    headers: { Authorization: `Bearer ${token}` },
-    params,
-  });
-
-  return data.tracks
-    .filter(t => !excludeIds.has(t.id) && !(BLOCK_EXPLICIT && t.explicit))
-    .slice(0, limit)
-    .map(t => ({
-      trackId: t.id,
-      title: t.name,
-      artist: t.artists.map(a => a.name).join(', '),
-      album: t.album.name,
-      albumArt: t.album.images[1]?.url || t.album.images[0]?.url || null,
-      explicit: t.explicit,
-      uri: t.uri,
-    }));
 }
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -87,6 +110,7 @@ const SCOPES = [
   'user-read-private',
   'user-modify-playback-state',
   'user-read-playback-state',
+  'user-library-read',
 ].join(' ');
 
 // ─── Spotify Token Helpers ────────────────────────────────────────────────────
@@ -196,6 +220,12 @@ async function ensureQueueHasUpcomingTrack() {
   return false;
 }
 
+function markTrackAsPlayed(trackId) {
+  if (trackId) {
+    recentlyPlayed.set(trackId, Date.now());
+  }
+}
+
 let advanceInProgress = false;
 
 async function advanceToNextTrack() {
@@ -214,6 +244,9 @@ async function advanceToNextTrack() {
   }
 
   targetTrack = next;
+  if (next?.trackId) {
+    markTrackAsPlayed(next.trackId);
+  }
   lastTrackChange = now;
   await ensureQueueHasUpcomingTrack();
 
@@ -288,27 +321,50 @@ app.get('/api/search', async (req, res) => {
   if (!q?.trim()) return res.status(400).json({ error: 'Query required' });
 
   try {
-    // Use client credentials for search (works without user auth)
+    const queryLower = q.trim().toLowerCase();
+    const isGenre = SEED_GENRES.includes(queryLower);
     const token = await getClientCredentialsToken();
     if (!token) return res.status(500).json({ error: 'Failed to authenticate with Spotify' });
 
-    const searchUrl = `https://api.spotify.com/v1/search?q=${encodeURIComponent(q)}&type=track&limit=10`;
-    const { data } = await axios.get(searchUrl, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    if (isGenre) {
+      // Search for genre using Spotify's genre filter
+      const searchUrl = `https://api.spotify.com/v1/search?q=genre:${encodeURIComponent(queryLower)}&type=track&limit=10`;
+      const { data } = await axios.get(searchUrl, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-    let tracks = data.tracks.items;
-    if (BLOCK_EXPLICIT) tracks = tracks.filter(t => !t.explicit);
+      let tracks = data.tracks.items;
+      if (BLOCK_EXPLICIT) tracks = tracks.filter(t => !t.explicit);
 
-    res.json(tracks.map(t => ({
-      trackId:  t.id,
-      title:    t.name,
-      artist:   t.artists.map(a => a.name).join(', '),
-      album:    t.album.name,
-      albumArt: t.album.images[1]?.url || t.album.images[0]?.url || null,
-      explicit: t.explicit,
-      duration: t.duration_ms,
-    })));
+      res.json(tracks.map(t => ({
+        trackId:  t.id,
+        title:    t.name,
+        artist:   t.artists.map(a => a.name).join(', '),
+        album:    t.album.name,
+        albumArt: t.album.images[1]?.url || t.album.images[0]?.url || null,
+        explicit: t.explicit,
+        duration: t.duration_ms,
+      })));
+    } else {
+      // Regular track search for non-genres
+      const searchUrl = `https://api.spotify.com/v1/search?q=${encodeURIComponent(q)}&type=track&limit=10`;
+      const { data } = await axios.get(searchUrl, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      let tracks = data.tracks.items;
+      if (BLOCK_EXPLICIT) tracks = tracks.filter(t => !t.explicit);
+
+      res.json(tracks.map(t => ({
+        trackId:  t.id,
+        title:    t.name,
+        artist:   t.artists.map(a => a.name).join(', '),
+        album:    t.album.name,
+        albumArt: t.album.images[1]?.url || t.album.images[0]?.url || null,
+        explicit: t.explicit,
+        duration: t.duration_ms,
+      })));
+    }
   } catch (err) {
     console.error('Search error:', err.response?.data || err.message);
     res.status(500).json({ error: 'Search failed' });
@@ -317,11 +373,29 @@ app.get('/api/search', async (req, res) => {
 
 app.get('/api/suggestions', async (req, res) => {
   try {
-    const tracks = await fetchSpotifyRecommendations(9);
-    res.json(tracks ?? []);
+    const genres = shuffleArray(SEED_GENRES).slice(0, 1)[0];
+    const query = `genre:${genres}`;
+    const ccToken = await getClientCredentialsToken();
+    const { data } = await axios.get('https://api.spotify.com/v1/search', {
+      headers: { Authorization: `Bearer ${ccToken}` },
+      params: { q: query, type: 'track', limit: 9 },
+    });
+    const excludeIds = new Set([...queue.map(t => t.trackId), currentTrack?.trackId].filter(Boolean));
+    const tracks = data.tracks.items
+      .filter(t => !excludeIds.has(t.id) && !(BLOCK_EXPLICIT && t.explicit))
+      .map(t => ({
+        trackId: t.id,
+        title: t.name,
+        artist: t.artists.map(a => a.name).join(', '),
+        album: t.album.name,
+        albumArt: t.album.images[1]?.url || t.album.images[0]?.url || null,
+        explicit: t.explicit,
+        uri: t.uri,
+      }));
+    res.json(tracks);
   } catch (err) {
     console.error('Suggestions error:', err.message);
-    res.status(500).json({ error: 'Failed to load suggestions' });
+    res.json([]);
   }
 });
 
