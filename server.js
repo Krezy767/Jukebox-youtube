@@ -39,6 +39,19 @@ const GENRE_PLAYLISTS = {
   'ambient': '37i9dQZF1DX9c7yCloFHHL'        // New Ambient
 };
 
+// Static fallback shown when playlist cache is unavailable (API limits etc.)
+const STATIC_FALLBACK_TRACKS = [
+  { trackId: '0VjIjW4GlUZAMYd2vXMi3b', title: 'Blinding Lights', artist: 'The Weeknd', album: 'After Hours', albumArt: null, explicit: false },
+  { trackId: '7qiZfU4dY1lWllzX7mPBI3', title: 'Shape of You', artist: 'Ed Sheeran', album: '÷ (Divide)', albumArt: null, explicit: false },
+  { trackId: '4LRPiXqCikLlN15c3yImP7', title: 'As It Was', artist: 'Harry Styles', album: "Harry's House", albumArt: null, explicit: false },
+  { trackId: '02MWAaffLxlfxAUY7c5dvx', title: 'Heat Waves', artist: 'Glass Animals', album: 'Dreamland', albumArt: null, explicit: false },
+  { trackId: '39LLxExYz6ewLAcYrzQQyP', title: 'Levitating', artist: 'Dua Lipa', album: 'Future Nostalgia', albumArt: null, explicit: false },
+  { trackId: '2Fxmhks0live0oHCCKLjJj', title: 'bad guy', artist: 'Billie Eilish', album: 'WHEN WE ALL FALL ASLEEP, WHERE DO WE GO?', albumArt: null, explicit: false },
+  { trackId: '5HCyWlXZPP0y6Gqq8TgA20', title: 'Stay', artist: 'The Kid LAROI & Justin Bieber', album: 'F*CK LOVE 3: OVER YOU', albumArt: null, explicit: false },
+  { trackId: '6UelLqGlWMcVH1E5c4H7lY', title: 'Watermelon Sugar', artist: 'Harry Styles', album: 'Fine Line', albumArt: null, explicit: false },
+  { trackId: '3PfIrDoz19wz7qK7tYeu62', title: "Don't Start Now", artist: 'Dua Lipa', album: 'Future Nostalgia', albumArt: null, explicit: false },
+];
+
 function shuffleArray(arr) {
   const out = [...arr];
   for (let i = out.length - 1; i > 0; i--) {
@@ -48,7 +61,7 @@ function shuffleArray(arr) {
   return out;
 }
 
-// Fetch recommendations from Spotify seeded by current track or random genres
+// Fetch recommendations from cached playlists
 async function fetchSpotifyRecommendations(limit = 1) {
   try {
     const now = Date.now();
@@ -70,28 +83,14 @@ async function fetchSpotifyRecommendations(limit = 1) {
       excludeIds.add(trackId);
     }
 
-    const genres = shuffleArray(SEED_GENRES).slice(0, 1)[0];
-    const query = `genre:${genres}`;
-    const ccToken = await getClientCredentialsToken();
-    const fetchLimit = Math.min(limit + excludeIds.size, 50);
+    // Pick from bar playlist, fall back to static list if cache empty
+    const pool = playlistCache.bar.length > 0 ? playlistCache.bar : STATIC_FALLBACK_TRACKS;
+    const candidates = pool
+      .filter(t => !excludeIds.has(t.trackId) && !(BLOCK_EXPLICIT && t.explicit))
+      .sort(() => Math.random() - 0.5)
+      .slice(0, limit);
 
-    const { data } = await axios.get('https://api.spotify.com/v1/search', {
-      headers: { Authorization: `Bearer ${ccToken}` },
-      params: { q: query, type: 'track', limit: fetchLimit },
-    });
-
-    return data.tracks.items
-      .filter(t => !excludeIds.has(t.id) && !(BLOCK_EXPLICIT && t.explicit))
-      .slice(0, limit)
-      .map(t => ({
-        trackId: t.id,
-        title: t.name,
-        artist: t.artists.map(a => a.name).join(', '),
-        album: t.album.name,
-        albumArt: t.album.images[1]?.url || t.album.images[0]?.url || null,
-        explicit: t.explicit,
-        uri: t.uri,
-      }));
+    return candidates.length > 0 ? candidates : null;
   } catch (err) {
     console.error('Failed to fetch recommendations:', err.message);
     return null;
@@ -104,6 +103,7 @@ const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
 const REDIRECT_URI  = process.env.REDIRECT_URI || 'http://127.0.0.1:3000/auth/callback';
 const BLOCK_EXPLICIT = process.env.BLOCK_EXPLICIT === 'true';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'changeme';
+const BAR_PLAYLIST_ID = '5DINNMoa9YkzBNQ1h1EMF2';
 const SCOPES = [
   'streaming',
   'user-read-email',
@@ -157,6 +157,195 @@ async function getClientCredentialsToken() {
   } catch (err) {
     console.error('Client credentials error:', err.response?.data);
     return null;
+  }
+}
+
+// ─── Playlist Cache ───────────────────────────────────────────────────────────
+let playlistCache = {
+  bar: [],
+};
+let suggestionRotationIndex = 0; // Tracks which songs to show next
+
+async function fetchPlaylistTracks(playlistId, token = null) {
+  try {
+    if (!token) token = await getClientCredentialsToken();
+    if (!token) {
+      console.error('No token available for playlist fetch');
+      return [];
+    }
+
+    console.log(`Fetching playlist ${playlistId}...`);
+    const allTracks = [];
+    let offset = 0;
+    let total = 1;
+
+    while (offset < total) {
+      const { data } = await axios.get(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { offset, limit: 50 },
+      });
+
+      total = data.total;
+      allTracks.push(...data.items.map(item => item.track).filter(Boolean));
+      offset += 50;
+    }
+
+    return allTracks.map(t => ({
+      trackId: t.id,
+      title: t.name,
+      artist: t.artists.map(a => a.name).join(', '),
+      album: t.album.name,
+      albumArt: t.album.images[1]?.url || t.album.images[0]?.url || null,
+      explicit: t.explicit,
+      uri: t.uri,
+    }));
+  } catch (err) {
+    console.error('Failed to fetch playlist tracks:', err.message);
+    return [];
+  }
+}
+
+async function initPlaylistCache() {
+  try {
+    console.log('Loading bar playlist...');
+    const tracks = await fetchPlaylistTracks(BAR_PLAYLIST_ID);
+
+    if (tracks.length > 0) {
+      // Filter explicit tracks if enabled
+      let filtered = BLOCK_EXPLICIT ? tracks.filter(t => !t.explicit) : tracks;
+
+      // Shuffle once on load
+      playlistCache.bar = shuffleArray(filtered);
+      suggestionRotationIndex = 0;
+
+      console.log(`✓ Loaded ${playlistCache.bar.length} tracks (${tracks.length - playlistCache.bar.length} filtered)`);
+    } else {
+      console.warn('No tracks loaded for bar playlist, trying genre playlist fallback...');
+      await tryGenrePlaylistFallback();
+    }
+  } catch (err) {
+    console.error('Failed to initialize playlist cache:', err.message);
+    await tryGenrePlaylistFallback();
+  }
+}
+
+async function tryGenrePlaylistFallback() {
+  for (const [genre, playlistId] of Object.entries(GENRE_PLAYLISTS)) {
+    try {
+      const tracks = await fetchPlaylistTracks(playlistId);
+      if (tracks.length > 0) {
+        let filtered = BLOCK_EXPLICIT ? tracks.filter(t => !t.explicit) : tracks;
+        playlistCache.bar = shuffleArray(filtered);
+        suggestionRotationIndex = 0;
+        console.log(`✓ Loaded ${playlistCache.bar.length} fallback tracks from ${genre} playlist`);
+        return;
+      }
+    } catch (err) {
+      console.warn(`Genre fallback ${genre} failed:`, err.message);
+    }
+  }
+  // Playlists all failed — populate cache via search API instead
+  console.warn('Playlists unavailable — building cache from search API...');
+  await buildCacheFromSearch();
+}
+
+async function buildCacheFromSearch() {
+  try {
+    const token = await getClientCredentialsToken();
+    if (!token) {
+      console.warn('No token for search cache build — using static fallback only');
+      await enrichStaticFallbackArt();
+      return;
+    }
+    const searchQueries = ['pop', 'rock', 'hip-hop', 'electronic', 'jazz', 'indie', 'r&b', 'dance'];
+    const collected = [];
+    for (const q of searchQueries) {
+      try {
+        const searchUrl = `https://api.spotify.com/v1/search?q=${encodeURIComponent(q)}&type=track&limit=10`;
+        const { data } = await axios.get(searchUrl, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const tracks = data.tracks?.items || [];
+        for (const t of tracks) {
+          if (!t?.id) continue;
+          if (BLOCK_EXPLICIT && t.explicit) continue;
+          collected.push({
+            trackId: t.id,
+            title: t.name,
+            artist: t.artists.map(a => a.name).join(', '),
+            album: t.album.name,
+            albumArt: t.album.images[1]?.url || t.album.images[0]?.url || null,
+            explicit: t.explicit,
+            uri: t.uri,
+          });
+        }
+      } catch (err) {
+        console.warn(`Search query "${q}" failed:`, err.response?.data?.error?.message || err.message);
+      }
+    }
+    const seen = new Set();
+    const unique = collected.filter(t => seen.has(t.trackId) ? false : seen.add(t.trackId));
+    if (unique.length > 0) {
+      playlistCache.bar = shuffleArray(unique);
+      suggestionRotationIndex = 0;
+      console.log(`✓ Built cache with ${unique.length} tracks from search API`);
+    } else {
+      console.warn('Search cache build yielded no tracks — using static fallback only');
+      await enrichStaticFallbackArt();
+    }
+  } catch (err) {
+    console.error('Failed to build cache from search:', err.message);
+    await enrichStaticFallbackArt();
+  }
+}
+
+async function refreshPlaylistCacheWithHostToken() {
+  const token = spotifyTokens.accessToken;
+  if (!token) return;
+  try {
+    console.log('Refreshing bar playlist cache with host token...');
+    const tracks = await fetchPlaylistTracks(BAR_PLAYLIST_ID, token);
+    if (tracks.length > 0) {
+      let filtered = BLOCK_EXPLICIT ? tracks.filter(t => !t.explicit) : tracks;
+      playlistCache.bar = shuffleArray(filtered);
+      suggestionRotationIndex = 0;
+      console.log(`✓ Loaded ${playlistCache.bar.length} tracks using host token`);
+      return;
+    }
+  } catch (err) {
+    console.warn('Host token playlist fetch failed:', err.message);
+  }
+  // Bar playlist inaccessible even with host token — fall back to search
+  if (playlistCache.bar.length === 0) {
+    await buildCacheFromSearch();
+  }
+}
+
+async function enrichStaticFallbackArt() {
+  // Uses iTunes Search API — no auth required, always available
+  let enriched = 0;
+  for (const track of STATIC_FALLBACK_TRACKS) {
+    if (track.albumArt) continue;
+    try {
+      const term = encodeURIComponent(`${track.title} ${track.artist}`);
+      const { data } = await axios.get(`https://itunes.apple.com/search?term=${term}&media=music&entity=song&limit=1`);
+      const result = data.results?.[0];
+      if (result?.artworkUrl100) {
+        track.albumArt = result.artworkUrl100.replace('100x100bb', '300x300bb');
+        enriched++;
+      }
+    } catch (err) {
+      // silent — grey box is fine as last resort
+    }
+  }
+  if (enriched > 0) {
+    console.log(`✓ Got album art for ${enriched} static fallback tracks via iTunes`);
+    // Patch any already-queued fallback items (no broadcast — don't disrupt playback state)
+    for (const item of [...queue, currentTrack, targetTrack].filter(Boolean)) {
+      if (!item.isFallback) continue;
+      const src = STATIC_FALLBACK_TRACKS.find(t => t.trackId === item.trackId);
+      if (src?.albumArt) item.albumArt = src.albumArt;
+    }
   }
 }
 
@@ -279,6 +468,8 @@ app.get('/auth/callback', async (req, res) => {
     spotifyTokens.accessToken  = data.access_token;
     spotifyTokens.refreshToken = data.refresh_token;
     spotifyTokens.expiresAt    = Date.now() + data.expires_in * 1000;
+    // Refresh playlist cache now that we have a host token (bypasses client-credentials 403)
+    refreshPlaylistCacheWithHostToken().catch(err => console.warn('Post-auth playlist refresh failed:', err.message));
     res.redirect('/host.html?auth=success');
   } catch (err) {
     console.error('Auth error:', err.response?.data);
@@ -373,26 +564,30 @@ app.get('/api/search', async (req, res) => {
 
 app.get('/api/suggestions', async (req, res) => {
   try {
-    const genres = shuffleArray(SEED_GENRES).slice(0, 1)[0];
-    const query = `genre:${genres}`;
-    const ccToken = await getClientCredentialsToken();
-    const { data } = await axios.get('https://api.spotify.com/v1/search', {
-      headers: { Authorization: `Bearer ${ccToken}` },
-      params: { q: query, type: 'track', limit: 9 },
-    });
     const excludeIds = new Set([...queue.map(t => t.trackId), currentTrack?.trackId].filter(Boolean));
-    const tracks = data.tracks.items
-      .filter(t => !excludeIds.has(t.id) && !(BLOCK_EXPLICIT && t.explicit))
-      .map(t => ({
-        trackId: t.id,
-        title: t.name,
-        artist: t.artists.map(a => a.name).join(', '),
-        album: t.album.name,
-        albumArt: t.album.images[1]?.url || t.album.images[0]?.url || null,
-        explicit: t.explicit,
-        uri: t.uri,
-      }));
-    res.json(tracks);
+
+    if (!playlistCache.bar || playlistCache.bar.length === 0) {
+      // Use static fallback when playlist cache is unavailable
+      const fallback = STATIC_FALLBACK_TRACKS.filter(t => !excludeIds.has(t.trackId));
+      return res.json(shuffleArray(fallback).slice(0, 9));
+    }
+
+    const suggestions = [];
+    let attempts = 0;
+    const maxAttempts = playlistCache.bar.length * 2; // Prevent infinite loop
+
+    // Collect 9 tracks, skipping ones already in queue
+    while (suggestions.length < 9 && attempts < maxAttempts) {
+      const track = playlistCache.bar[suggestionRotationIndex];
+      suggestionRotationIndex = (suggestionRotationIndex + 1) % playlistCache.bar.length;
+      attempts++;
+
+      if (track && !excludeIds.has(track.trackId)) {
+        suggestions.push(track);
+      }
+    }
+
+    res.json(suggestions);
   } catch (err) {
     console.error('Suggestions error:', err.message);
     res.json([]);
@@ -410,6 +605,7 @@ app.post('/api/queue', (req, res) => {
   if (!trackId) return res.status(400).json({ error: 'trackId required' });
   if (BLOCK_EXPLICIT && explicit) return res.status(400).json({ error: 'Explicit songs are disabled' });
   if (queue.find(i => i.trackId === trackId)) return res.status(409).json({ error: 'Song already in queue' });
+  if (currentTrack?.trackId === trackId) return res.status(409).json({ error: 'Song is currently playing' });
 
   const item = {
     id: uuidv4(), trackId, title, artist, album, albumArt, explicit,
@@ -703,4 +899,7 @@ io.on('connection', socket => {
 
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
-server.listen(PORT, HOST, () => console.log(`🎵 Jukebox server running → http://${HOST}:${PORT}`));
+server.listen(PORT, HOST, () => {
+  console.log(`🎵 Jukebox server running → http://${HOST}:${PORT}`);
+  buildCacheFromSearch().catch(err => console.warn('Startup cache build failed:', err.message));
+});

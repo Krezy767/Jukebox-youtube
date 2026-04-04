@@ -991,6 +991,295 @@
   }
   .s4u-btn:hover { color: #f9f5f8; background: #1f1f22; }
 
+  /* ── Queue Modal ────────────────────────────────────────── */
+  .queue-modal {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    max-width: 480px;
+    margin: 0 auto;
+    background: #0e0e10;
+    z-index: 110;
+    opacity: 0;
+    transform: translateY(18px);
+    pointer-events: none;
+    transition: opacity 0.28s ease, transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+  }
+  .queue-modal.open {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+
+  .queue-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    background: rgba(14,14,16,0.95);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-bottom: 1px solid rgba(72,71,74,0.3);
+    flex-shrink: 0;
+  }
+
+  .queue-modal-back {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: transparent;
+    border: none;
+    color: #adaaad;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .queue-modal-back:active {
+    background: rgba(60,248,196,0.1);
+    color: #3cf8c4;
+  }
+  .queue-modal-back span { font-size: 22px; }
+
+  .queue-modal-title {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: #f9f5f8;
+    text-align: center;
+    flex: 1;
+    letter-spacing: -0.3px;
+  }
+
+  .queue-modal-scroll {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .queue-modal-scroll::-webkit-scrollbar { display: none; }
+
+  /* Now Playing - Floating Island */
+  .queue-np-container {
+    padding: 16px 12px;
+    flex-shrink: 0;
+  }
+
+  .queue-np-card {
+    background: rgba(19,19,21,0.6);
+    border: 1px solid rgba(72,71,74,0.2);
+    border-radius: 16px;
+    padding: 16px 14px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.4);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .queue-np-album-top {
+    text-align: center;
+    margin-bottom: 12px;
+  }
+
+  .queue-np-art {
+    width: 320px;
+    height: 320px;
+    border-radius: 10px;
+    object-fit: cover;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+    display: inline-block;
+  }
+
+  .queue-np-content {
+    padding-left: 2px;
+    margin-bottom: 12px;
+  }
+
+  .queue-np-title {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: #f9f5f8;
+    margin-bottom: 4px;
+    letter-spacing: -0.3px;
+    line-height: 1.2;
+  }
+
+  .queue-np-artist {
+    font-size: 14px;
+    color: #adaaad;
+    font-weight: 500;
+  }
+
+  /* Progress Bar */
+  .queue-progress-bar-wrapper {
+    margin-top: 12px;
+  }
+  .queue-progress-track {
+    height: 2px;
+    background: rgba(72,71,74,0.3);
+    border-radius: 1px;
+  }
+  .queue-progress-bar {
+    height: 100%;
+    background: #3cf8c4;
+    width: 0%;
+    transition: width 0.1s linear;
+    border-radius: 1px;
+  }
+
+  .queue-progress-time {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: #adaaad;
+    font-family: 'Courier New', monospace;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+  }
+
+  /* Up Next Section */
+  .queue-up-next-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 20px 16px 16px;
+  }
+
+  .queue-up-next-title {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 16px;
+    font-weight: 800;
+    color: #f9f5f8;
+    margin-bottom: 12px;
+    letter-spacing: -0.3px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .queue-up-next-count {
+    color: #adaaad;
+    font-weight: 600;
+    font-size: 16px;
+  }
+
+  .queue-modal-list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-right: 4px;
+  }
+  .queue-modal-list::-webkit-scrollbar { width: 6px; }
+  .queue-modal-list::-webkit-scrollbar-track { background: transparent; }
+  .queue-modal-list::-webkit-scrollbar-thumb {
+    background: rgba(60,248,196,0.2);
+    border-radius: 9999px;
+  }
+  .queue-modal-list::-webkit-scrollbar-thumb:hover {
+    background: rgba(60,248,196,0.35);
+  }
+
+  .queue-modal-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: rgba(19,19,21,0.5);
+    border: 1px solid rgba(72,71,74,0.2);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .queue-modal-item:hover {
+    background: rgba(31,31,34,0.7);
+    border-color: rgba(60,248,196,0.3);
+    box-shadow: 0 8px 24px rgba(60,248,196,0.12);
+  }
+
+  .queue-modal-item-pos {
+    min-width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(60,248,196,0.08);
+    border-radius: 8px;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-weight: 700;
+    font-size: 12px;
+    color: #3cf8c4;
+  }
+  .queue-modal-item-pos.top {
+    font-size: 14px;
+  }
+
+  .queue-modal-item-img {
+    width: 44px;
+    height: 44px;
+    border-radius: 9px;
+    object-fit: cover;
+    flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  }
+
+  .queue-modal-item-info {
+    flex: 1;
+    min-width: 0;
+  }
+  .queue-modal-item-title {
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: #f9f5f8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 2px;
+  }
+  .queue-modal-item-artist {
+    font-size: 11px;
+    color: #adaaad;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .queue-modal-vote-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(60,248,196,0.1);
+    border: 1px solid rgba(60,248,196,0.25);
+    color: #3cf8c4;
+    border-radius: 8px;
+    padding: 4px 8px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+  .queue-modal-vote-btn:hover {
+    background: rgba(60,248,196,0.2);
+    border-color: rgba(60,248,196,0.5);
+    box-shadow: 0 4px 12px rgba(60,248,196,0.2);
+  }
+  .queue-modal-vote-btn:active {
+    transform: scale(0.98);
+  }
+  .queue-modal-vote-btn.voted {
+    opacity: 0.6;
+    cursor: default;
+  }
+
   /* ── Overlay internal header ─────────────────────────────── */
   .overlay-header {
     position: sticky;
@@ -1295,6 +1584,51 @@
   <div id="overlaySearchResults" style="display:none;padding:0 20px;margin-top:8px"></div>
 </div>
 
+<!-- ── Queue Modal Overlay ── -->
+<div class="queue-modal" id="queueModal">
+  <!-- Header -->
+  <div class="queue-modal-header">
+    <button class="queue-modal-back" onclick="closeQueueModal()" aria-label="Close queue">
+      <span class="material-symbols-outlined">arrow_back</span>
+    </button>
+    <h2 class="queue-modal-title">Queue</h2>
+    <div style="width:32px"></div>
+  </div>
+
+  <!-- Scroll Container -->
+  <div class="queue-modal-scroll">
+    <!-- Now Playing Section -->
+    <div class="queue-np-container" id="queueNowPlayingSection">
+      <div class="queue-np-card">
+        <div class="queue-np-album-top">
+          <img id="queueNowPlayingArt" src="" alt="Album Art" class="queue-np-art">
+        </div>
+        <div class="queue-np-content">
+          <h3 id="queueNowPlayingTitle" class="queue-np-title">—</h3>
+          <p id="queueNowPlayingArtist" class="queue-np-artist">—</p>
+        </div>
+        <div class="queue-progress-bar-wrapper">
+          <div class="queue-progress-track">
+            <div class="queue-progress-bar" id="queueProgressBar"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Up Next Section -->
+    <div class="queue-up-next-section">
+      <h3 class="queue-up-next-title">Up Next <span class="queue-up-next-count" id="upNextCount">0</span></h3>
+      <div class="queue-modal-list" id="queueModalList">
+        <div class="empty-state" style="padding:40px 20px;text-align:center">
+          <div class="icon"><span class="material-symbols-outlined" style="font-size:32px;color:#adaaad">music_note</span></div>
+          <h3 style="margin-top:12px;color:#f9f5f8">Queue is empty</h3>
+          <p style="color:#adaaad;font-size:14px;margin-top:8px">Search for a song to add it</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ── Bottom nav ── -->
 <div class="bottom-nav">
   <div class="nav-tab active" id="navExplore" onclick="closeSearchOverlay()">
@@ -1305,7 +1639,7 @@
     <span class="nav-icon material-symbols-outlined">search</span>
     <span class="nav-label">Search</span>
   </div>
-  <div class="nav-tab" id="navQueue" onclick="closeSearchOverlay(); setTimeout(()=>document.getElementById('queueSection').scrollIntoView({behavior:'smooth'}),50)">
+  <div class="nav-tab" id="navQueue" onclick="openQueueModal()">
     <span class="nav-icon material-symbols-outlined">queue_music</span>
     <span class="nav-label">Queue</span>
   </div>
@@ -1325,13 +1659,19 @@
 
   // ─── Socket.io ───────────────────────────────────────────────────────────
   const socket = io();
-  socket.on('queueUpdate', ({ queue, currentTrack }) => {
+  socket.on('queueUpdate', ({ queue, currentTrack: track }) => {
+    currentTrack = track;
     renderQueue(queue);
-    renderNowPlaying(currentTrack, queue[0] || null);
+    renderNowPlaying(track, queue.find(i => !i.isFallback) || null);
+    // Update queue modal if open
+    if (document.getElementById('queueModal').classList.contains('open')) {
+      renderQueueModal();
+      updateQueueModalNowPlaying(track);
+    }
   });
 
   // ─── Search ──────────────────────────────────────────────────────────────
-  let searchTimeout, currentQueue = [];
+  let searchTimeout, currentQueue = [], currentTrack = null;
   let toastTimeout = null;
   let suggestionsHintTimers = [];
   let suggestionsHintFrame = null;
@@ -1562,14 +1902,15 @@
   // ─── Render Queue ────────────────────────────────────────────────────────
   function renderQueue(queue) {
     currentQueue = queue;
-    document.getElementById('queueCount').textContent = queue.length;
+    const visibleQueue = queue.filter(i => !i.isFallback);
+    document.getElementById('queueCount').textContent = visibleQueue.length;
     loadSuggestions();
     const el = document.getElementById('queueList');
-    if (!queue.length) {
+    if (!visibleQueue.length) {
       el.innerHTML = '<div class="empty-state"><div class="icon"><span class="material-symbols-outlined" style="font-size:32px;color:#adaaad">music_note</span></div><h3>The stage is yours</h3><p>Search for a song above to add it to the queue and get the party started!</p></div>';
       return;
     }
-    el.innerHTML = queue.map((item, i) => {
+    el.innerHTML = visibleQueue.map((item, i) => {
       const hasVoted = item.voters.includes(voterId);
       return `<div class="queue-card">
         <div class="queue-pos ${i === 0 ? 'top' : ''}">${i === 0 ? '1' : i + 1}</div>
@@ -1668,6 +2009,97 @@
     document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
     document.getElementById('navExplore').classList.add('active');
     overlayInput.blur();
+  }
+
+  // ─── Queue Modal ─────────────────────────────────────────────────────────
+  function openQueueModal() {
+    closeSearchOverlay(); // Close search if open
+    document.getElementById('queueModal').classList.add('open');
+    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('navQueue').classList.add('active');
+    renderQueueModal();
+    // Update now playing section with current track
+    if (currentTrack) {
+      updateQueueModalNowPlaying(currentTrack);
+    }
+  }
+
+  function closeQueueModal() {
+    document.getElementById('queueModal').classList.remove('open');
+    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('navExplore').classList.add('active');
+  }
+
+  function renderQueueModal() {
+    const queueList = document.getElementById('queueModalList');
+    const countEl = document.getElementById('upNextCount');
+    const visibleQueue = currentQueue.filter(i => !i.isFallback);
+
+    if (!visibleQueue.length) {
+      queueList.innerHTML = '<div class="empty-state" style="padding:40px 20px;text-align:center"><div class="icon"><span class="material-symbols-outlined" style="font-size:32px;color:#adaaad">music_note</span></div><h3 style="margin-top:12px;color:#f9f5f8">Queue is empty</h3><p style="color:#adaaad;font-size:14px;margin-top:8px">Search for a song to add it</p></div>';
+      countEl.textContent = '0';
+      return;
+    }
+
+    countEl.textContent = visibleQueue.length;
+    queueList.innerHTML = visibleQueue.map((item, i) => {
+      const hasVoted = item.voters.includes(voterId);
+      return `<div class="queue-modal-item">
+        <div class="queue-modal-item-pos ${i === 0 ? 'top' : ''}">${i === 0 ? '👑' : i + 1}</div>
+        <img src="${item.albumArt || ''}" alt="" class="queue-modal-item-img" style="background:#262528;">
+        <div class="queue-modal-item-info">
+          <div class="queue-modal-item-title">${esc(item.title)}</div>
+          <div class="queue-modal-item-artist">${esc(item.artist)}</div>
+        </div>
+        <button class="queue-modal-vote-btn ${hasVoted ? 'voted' : ''}" onclick="vote('${item.id}')" ${hasVoted ? 'disabled' : ''}>
+          <span>▲</span>
+          <span>${item.votes}</span>
+        </button>
+      </div>`;
+    }).join('');
+  }
+
+  let trackStartTime = null;
+  let trackDuration = 180; // Default 3 minutes
+  let progressInterval = null;
+
+  function formatSeconds(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  }
+
+  function updateQueueModalNowPlaying(track) {
+    if (!track) {
+      document.getElementById('queueNowPlayingSection').style.display = 'none';
+      clearInterval(progressInterval);
+      return;
+    }
+    document.getElementById('queueNowPlayingSection').style.display = 'block';
+    document.getElementById('queueNowPlayingTitle').textContent = track.title || '—';
+    document.getElementById('queueNowPlayingArtist').textContent = track.artist || '—';
+    const img = document.getElementById('queueNowPlayingArt');
+    img.src = track.albumArt || '';
+    img.style.background = track.albumArt ? 'transparent' : '#262528';
+
+    // Reset playback tracking
+    trackStartTime = Date.now();
+    trackDuration = track.duration || 180;
+
+    // Clear existing interval
+    clearInterval(progressInterval);
+
+    // Update progress bar in real-time
+    progressInterval = setInterval(() => {
+      if (!document.getElementById('queueModal').classList.contains('open')) {
+        clearInterval(progressInterval);
+        return;
+      }
+      const elapsed = (Date.now() - trackStartTime) / 1000;
+      const progress = Math.min(100, (elapsed / trackDuration) * 100);
+      document.getElementById('queueProgressBar').style.width = progress + '%';
+      document.getElementById('queueProgressThumb').style.left = progress + '%';
+    }, 100);
   }
 
   overlayInput.addEventListener('input', () => {

@@ -1161,7 +1161,7 @@
       if (currentServerTrack?.trackId !== targetTrack.trackId) {
         lastAckedTrackId = null;
       }
-      if (actualTrack?.trackId && currentServerTrack?.trackId === actualTrack.trackId && targetTrack?.trackId !== actualTrack.trackId) {
+      if (actualTrack?.trackId && currentServerTrack?.trackId === actualTrack.trackId && targetTrack?.trackId !== actualTrack.trackId && !targetTrack?.isFallback) {
         pauseForTransition(`switching to ${targetTrack.title}`);
       }
       lastAutoSkipTargetId = null;
