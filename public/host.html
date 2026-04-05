@@ -603,6 +603,15 @@
         log(`Now playing: ${actualTrack.title}`);
         setDebugResult(`sdk loaded ${actualTrack.title}`);
 
+        // Spotify sometimes inherits the previous track's playback position when
+        // advancing to a pre-staged upcoming track (e.g. song A was 3:16, so song B
+        // starts at 3:16 instead of 0:00). Seek to 0 whenever a new track starts
+        // mid-way through to ensure every song begins from the start.
+        if (state.position > 2000) {
+          try { await player.seek(0); } catch (_) {}
+          log(`Corrected start position for: ${actualTrack.title}`);
+        }
+
         const naturalAdvanceToUpcoming =
           targetTrack?.trackId &&
           previousTrackId === targetTrack.trackId &&
@@ -953,7 +962,10 @@
       });
 
       if (!result.restricted) {
-        const confirmedDirect = await waitForLoadedTrack(targetTrack.trackId);
+        // Direct play command was accepted — give Spotify more time to load it.
+        // Do NOT fall through to staging if the command was accepted; that causes
+        // staging+next to play whatever was already in the native queue instead.
+        const confirmedDirect = await waitForLoadedTrack(targetTrack.trackId, 5500);
         if (confirmedDirect) {
           try { await player.seek(0); } catch (err) {}
           try { await player.resume(); } catch (err) {}
@@ -961,8 +973,12 @@
           log(`Started requested track: ${targetTrack.title}`);
           markConfirmedTargetGrace(targetTrack.trackId);
           setDebugResult(`auto direct confirmed ${targetTrack.title}`);
-          return;
+        } else {
+          log(`Direct play timed out for ${targetTrack.title} — showing manual button`);
+          setDebugResult(`auto direct timed out — use Play button`);
+          renderRequestedTrack();
         }
+        return;
       }
 
       const staged = await stageRequestedTrack();
@@ -985,6 +1001,26 @@
         markConfirmedTargetGrace(targetTrack.trackId);
         setDebugResult(`auto next confirmed ${targetTrack.title}`);
       } else {
+        // First skip may have played the pre-staged upcoming track — try one more skip
+        const midState = await player?.getCurrentState().catch(() => null);
+        const midLoadedId = midState?.track_window?.current_track?.id;
+        if (midLoadedId && midLoadedId !== targetTrack.trackId && midLoadedId === lastStagedUpcomingId) {
+          setDebugCommand(`auto next skip upcoming: ${targetTrack.title}`);
+          await runPlaybackCommand(async () => {
+            await sleep(300);
+            await spotifyNext();
+          });
+          const confirmedSecond = await waitForLoadedTrack(targetTrack.trackId);
+          if (confirmedSecond) {
+            try { await player.seek(0); } catch (err) {}
+            try { await player.resume(); } catch (err) {}
+            userPausedPlayback = false;
+            log(`Advanced to requested track (2nd skip): ${targetTrack.title}`);
+            markConfirmedTargetGrace(targetTrack.trackId);
+            setDebugResult(`auto next confirmed ${targetTrack.title}`);
+            return;
+          }
+        }
         log(`Spotify stayed on another track after skip to ${targetTrack.title}`);
         setDebugResult(`auto next not confirmed for ${targetTrack.title}`);
       }
