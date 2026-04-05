@@ -1200,6 +1200,11 @@
     }
 
     if (!actualTrack?.trackId) {
+      if (targetTrack?.isFallback) {
+        log(`Fallback queued (${targetTrack.title}) — waiting for first user request before autoplay`);
+        setDebugResult(`waiting for first user request`);
+        return;
+      }
       log(`Ready to start: ${targetTrack.title}`);
       setDebugResult(`ready to start ${targetTrack.title}`);
       tryBootstrapTargetPlayback();
@@ -1277,7 +1282,7 @@
       } catch (err) {}
 
       log('Device ready — waiting for admin to start music');
-      tryBootstrapTargetPlayback();
+      if (!targetTrack?.isFallback) tryBootstrapTargetPlayback();
 
       if (playbackWatchdogInterval) clearInterval(playbackWatchdogInterval);
       playbackWatchdogInterval = setInterval(async () => {
