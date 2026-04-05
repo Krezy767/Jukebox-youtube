@@ -523,7 +523,11 @@
     }
     const matchesCurrent = currentServerTrack?.trackId && actualTrack.trackId === currentServerTrack.trackId;
     const matchesTarget = targetTrack?.trackId && actualTrack.trackId === targetTrack.trackId;
-    return !matchesCurrent && !matchesTarget;
+    if (matchesCurrent || matchesTarget) return false;
+    // Spotify track relinking: same song substituted with different ID — match by title+artist
+    const relinkedTarget = targetTrack?.title && actualTrack.title === targetTrack.title && actualTrack.artist === targetTrack.artist;
+    const relinkedCurrent = currentServerTrack?.title && actualTrack.title === currentServerTrack.title && actualTrack.artist === currentServerTrack.artist;
+    return !relinkedTarget && !relinkedCurrent;
   }
 
   async function pauseForeignPlayback() {
