@@ -30,14 +30,6 @@ let recentlyPlayed = new Map(); // trackId -> timestamp of when it was played
 
 const SEED_GENRES = ['pop', 'rock', 'electronic', 'hip-hop', 'jazz', 'ambient'];
 
-const GENRE_PLAYLISTS = {
-  'pop': '37i9dQZF1DWVlLVXKTOAYa',           // Pop Right Now
-  'rock': '37i9dQZF1DWZryfp6NSvtz',          // All New Rock
-  'electronic': '37i9dQZF1DX0BcQWzuB7ZO',   // Dance Hits
-  'hip-hop': '37i9dQZF1DX48TTZL62Yht',       // Hip-Hop Favourites
-  'jazz': '37i9dQZF1DWV7EzJMK2FUI',          // Jazz in the Background
-  'ambient': '37i9dQZF1DX9c7yCloFHHL'        // New Ambient
-};
 
 // Static fallback shown when playlist cache is unavailable (API limits etc.)
 const STATIC_FALLBACK_TRACKS = [
@@ -103,7 +95,6 @@ const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
 const REDIRECT_URI  = process.env.REDIRECT_URI || 'http://127.0.0.1:3000/auth/callback';
 const BLOCK_EXPLICIT = process.env.BLOCK_EXPLICIT === 'true';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'changeme';
-const BAR_PLAYLIST_ID = '5DINNMoa9YkzBNQ1h1EMF2';
 const SCOPES = [
   'streaming',
   'user-read-email',
@@ -166,88 +157,6 @@ let playlistCache = {
 };
 let suggestionRotationIndex = 0; // Tracks which songs to show next
 
-async function fetchPlaylistTracks(playlistId, token = null) {
-  try {
-    if (!token) token = await getClientCredentialsToken();
-    if (!token) {
-      console.error('No token available for playlist fetch');
-      return [];
-    }
-
-    console.log(`Fetching playlist ${playlistId}...`);
-    const allTracks = [];
-    let offset = 0;
-    let total = 1;
-
-    while (offset < total) {
-      const { data } = await axios.get(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
-        headers: { Authorization: `Bearer ${token}` },
-        params: { offset, limit: 50 },
-      });
-
-      total = data.total;
-      allTracks.push(...data.items.map(item => item.track).filter(Boolean));
-      offset += 50;
-    }
-
-    return allTracks.map(t => ({
-      trackId: t.id,
-      title: t.name,
-      artist: t.artists.map(a => a.name).join(', '),
-      album: t.album.name,
-      albumArt: t.album.images[1]?.url || t.album.images[0]?.url || null,
-      explicit: t.explicit,
-      uri: t.uri,
-    }));
-  } catch (err) {
-    console.error('Failed to fetch playlist tracks:', err.message);
-    return [];
-  }
-}
-
-async function initPlaylistCache() {
-  try {
-    console.log('Loading bar playlist...');
-    const tracks = await fetchPlaylistTracks(BAR_PLAYLIST_ID);
-
-    if (tracks.length > 0) {
-      // Filter explicit tracks if enabled
-      let filtered = BLOCK_EXPLICIT ? tracks.filter(t => !t.explicit) : tracks;
-
-      // Shuffle once on load
-      playlistCache.bar = shuffleArray(filtered);
-      suggestionRotationIndex = 0;
-
-      console.log(`✓ Loaded ${playlistCache.bar.length} tracks (${tracks.length - playlistCache.bar.length} filtered)`);
-    } else {
-      console.warn('No tracks loaded for bar playlist, trying genre playlist fallback...');
-      await tryGenrePlaylistFallback();
-    }
-  } catch (err) {
-    console.error('Failed to initialize playlist cache:', err.message);
-    await tryGenrePlaylistFallback();
-  }
-}
-
-async function tryGenrePlaylistFallback() {
-  for (const [genre, playlistId] of Object.entries(GENRE_PLAYLISTS)) {
-    try {
-      const tracks = await fetchPlaylistTracks(playlistId);
-      if (tracks.length > 0) {
-        let filtered = BLOCK_EXPLICIT ? tracks.filter(t => !t.explicit) : tracks;
-        playlistCache.bar = shuffleArray(filtered);
-        suggestionRotationIndex = 0;
-        console.log(`✓ Loaded ${playlistCache.bar.length} fallback tracks from ${genre} playlist`);
-        return;
-      }
-    } catch (err) {
-      console.warn(`Genre fallback ${genre} failed:`, err.message);
-    }
-  }
-  // Playlists all failed — populate cache via search API instead
-  console.warn('Playlists unavailable — building cache from search API...');
-  await buildCacheFromSearch();
-}
 
 async function buildCacheFromSearch() {
   try {
@@ -299,23 +208,7 @@ async function buildCacheFromSearch() {
   }
 }
 
-async function refreshPlaylistCacheWithHostToken() {
-  const token = spotifyTokens.accessToken;
-  if (!token) return;
-  try {
-    console.log('Refreshing bar playlist cache with host token...');
-    const tracks = await fetchPlaylistTracks(BAR_PLAYLIST_ID, token);
-    if (tracks.length > 0) {
-      let filtered = BLOCK_EXPLICIT ? tracks.filter(t => !t.explicit) : tracks;
-      playlistCache.bar = shuffleArray(filtered);
-      suggestionRotationIndex = 0;
-      console.log(`✓ Loaded ${playlistCache.bar.length} tracks using host token`);
-      return;
-    }
-  } catch (err) {
-    console.warn('Host token playlist fetch failed:', err.message);
-  }
-  // Bar playlist inaccessible even with host token — fall back to search
+async function ensureCacheBuilt() {
   if (playlistCache.bar.length === 0) {
     await buildCacheFromSearch();
   }
@@ -468,8 +361,7 @@ app.get('/auth/callback', async (req, res) => {
     spotifyTokens.accessToken  = data.access_token;
     spotifyTokens.refreshToken = data.refresh_token;
     spotifyTokens.expiresAt    = Date.now() + data.expires_in * 1000;
-    // Refresh playlist cache now that we have a host token (bypasses client-credentials 403)
-    refreshPlaylistCacheWithHostToken().catch(err => console.warn('Post-auth playlist refresh failed:', err.message));
+    ensureCacheBuilt().catch(err => console.warn('Post-auth cache build failed:', err.message));
     res.redirect('/host.html?auth=success');
   } catch (err) {
     console.error('Auth error:', err.response?.data);

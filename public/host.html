@@ -345,6 +345,64 @@
   let lastProgressState = { position: 0, duration: 0, paused: true, updatedAt: 0 };
   let transitionPauseUntil = 0;
 
+  const NORMAL_VOLUME = 0.8;
+  const FADE_OUT_DURATION_MS = 9000;
+  const FADE_IN_DURATION_MS = 5000;
+  const FADE_STEP_MS = 80;
+  const SWITCH_AT_REMAINING_MS = 1500;
+  let fadeOutTimer = null;
+  let fadeInTimer = null;
+  let switchAfterFadeTimer = null;
+  let fadeStartedForTrackId = null;
+  let switchDoneForTrackId = null;
+
+  function cancelFades(restoreVolume = false) {
+    if (fadeOutTimer) { clearInterval(fadeOutTimer); fadeOutTimer = null; }
+    if (fadeInTimer) { clearInterval(fadeInTimer); fadeInTimer = null; }
+    if (switchAfterFadeTimer) { clearTimeout(switchAfterFadeTimer); switchAfterFadeTimer = null; }
+    if (restoreVolume) {
+      player?.setVolume(NORMAL_VOLUME)?.catch(() => {});
+    }
+  }
+
+  function startFadeOut(onSilent) {
+    if (fadeOutTimer) return;
+    const fadeDuration = FADE_OUT_DURATION_MS - SWITCH_AT_REMAINING_MS - 200;
+    const startTime = Date.now();
+    fadeOutTimer = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(1, elapsed / fadeDuration);
+      const vol = Math.max(0, NORMAL_VOLUME * (1 - progress));
+      player?.setVolume(vol)?.catch(() => {});
+      if (progress >= 1) {
+        clearInterval(fadeOutTimer);
+        fadeOutTimer = null;
+        player?.setVolume(0)?.catch(() => {}); // guarantee silence
+        if (onSilent) {
+          switchAfterFadeTimer = setTimeout(() => {
+            switchAfterFadeTimer = null;
+            onSilent();
+          }, 200);
+        }
+      }
+    }, FADE_STEP_MS);
+    log(`Fading out: ${actualTrack?.title}`);
+  }
+
+  function startFadeIn() {
+    cancelFades(false);
+    player?.setVolume(0)?.catch(() => {});
+    const startTime = Date.now();
+    fadeInTimer = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(1, elapsed / FADE_IN_DURATION_MS);
+      const vol = Math.min(NORMAL_VOLUME, NORMAL_VOLUME * progress);
+      player?.setVolume(vol)?.catch(() => {});
+      if (progress >= 1) { clearInterval(fadeInTimer); fadeInTimer = null; }
+    }, FADE_STEP_MS);
+    log(`Fading in: ${actualTrack?.title}`);
+  }
+
   let actualTrack = null;
   let currentServerTrack = null;
   let targetTrack = null;
@@ -524,9 +582,10 @@
   }
 
   function scheduleStageUpcoming() {
-    clearStageUpcomingTimer();
     if (!targetTrack?.trackId || actualTrack?.trackId !== targetTrack.trackId) return;
+    if (stageUpcomingTimer) return; // already scheduled, don't reset
     stageUpcomingTimer = setTimeout(() => {
+      stageUpcomingTimer = null;
       stageUpcomingTrack();
     }, 1200);
   }
@@ -598,6 +657,9 @@
 
       if (changedTrack) {
         lastNextRequestTrackId = null;
+        fadeStartedForTrackId = null;
+        switchDoneForTrackId = null;
+        startFadeIn();
         renderNowPlaying(actualTrack);
         renderRequestedTrack();
         log(`Now playing: ${actualTrack.title}`);
@@ -679,7 +741,7 @@
       sdkTrack?.id === targetTrack?.trackId;
     const stoppedAfterEnd = sameTrackAsBefore && wasNearEnd && state.paused && state.position < 2000;
 
-    if (shouldStartSilentHandoff(state)) {
+    if (shouldStartSilentHandoff(state) && !fadeOutTimer) {
       log(`Silent handoff window reached for ${actualTrack?.title || 'track'} — requesting next`);
       requestNextTrack();
     } else if (state.paused && state.duration > 0 && state.position >= state.duration - 500) {
@@ -690,6 +752,31 @@
       }
       log(`Detected end of ${actualTrack?.title || 'track'} — requesting next`);
       requestNextTrack();
+    }
+
+    // Fade out when approaching end of the confirmed target track
+    if (!state.paused && state.duration > 0 &&
+        actualTrack?.trackId && actualTrack.trackId === targetTrack?.trackId) {
+      const remaining = state.duration - state.position;
+
+      if (remaining > 0 && remaining <= FADE_OUT_DURATION_MS &&
+          fadeStartedForTrackId !== actualTrack.trackId) {
+        fadeStartedForTrackId = actualTrack.trackId;
+        const trackAtFadeStart = actualTrack;
+        startFadeOut(() => {
+          // Fired 200ms after fade reaches 0 — guaranteed silence
+          if (switchDoneForTrackId === trackAtFadeStart.trackId) return;
+          if (!upcomingTrack?.trackId || playbackCommandInFlight || manualSwitchInFlight) return;
+          switchDoneForTrackId = trackAtFadeStart.trackId;
+          const scheduledUpcoming = upcomingTrack;
+          log(`Switching to next: ${scheduledUpcoming.title}`);
+          runPlaybackCommand(async () => {
+            await transferPlaybackToHost(false);
+            await player?.setVolume(0);
+            await spotifyPlay(trackUri(scheduledUpcoming));
+          }).catch(() => {});
+        });
+      }
     }
 
     previousPlaybackSnapshot = {
@@ -1035,6 +1122,7 @@
     if (manualSwitchInFlight) return;
 
     manualSwitchInFlight = true;
+    cancelFades(true);
     setDebugCommand(`manual play: ${targetTrack.title}`);
     try {
       await activateSdkPlayback(true);
@@ -1292,6 +1380,10 @@
       window.removeEventListener('click', activateOnGesture);
       window.removeEventListener('touchstart', activateOnGesture);
       window.removeEventListener('keydown', activateOnGesture);
+      // First gesture unlocks audio — try to start playback if nothing is running yet
+      if (!actualTrack?.trackId && targetTrack?.trackId && !manualSwitchInFlight) {
+        tryBootstrapTargetPlayback();
+      }
     };
     window.addEventListener('click', activateOnGesture, { passive: true });
     window.addEventListener('touchstart', activateOnGesture, { passive: true });
@@ -1388,7 +1480,11 @@
     await activateSdkPlayback(true);
     setDebugCommand('toggle play');
     const state = await player?.getCurrentState().catch(() => null);
-      if (state) {
+
+    // Only use resume/pause if we've confirmed something is actually playing on
+    // this device. SDK state alone isn't enough — it can reflect a stale session
+    // from another device where player.resume() silently does nothing.
+    if (state && actualTrack?.trackId) {
       if (state.paused) {
         await player.resume();
         userPausedPlayback = false;
@@ -1403,6 +1499,7 @@
       return;
     }
 
+    // Nothing confirmed playing — force-start the target via API
     if (targetTrack?.trackId) {
       await playRequestedTrack(true);
     }
@@ -1463,9 +1560,6 @@
     lastNextRequestTrackId = actualTrack?.trackId || null;
     try {
       setDebugCommand('request next');
-      if (actualTrack?.trackId && targetTrack?.trackId === actualTrack.trackId) {
-        await pauseForTransition(`advancing from ${actualTrack.title}`);
-      }
       const res = await fetch('/api/next', { method: 'POST' });
       const { track } = await res.json();
       if (track) {
