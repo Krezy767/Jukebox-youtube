@@ -753,6 +753,12 @@
     } else if (!userPausedPlayback && (replayInsteadOfAdvance || restartedSameTrack || stoppedAfterEnd)) {
       if (replayInsteadOfAdvance) {
         pauseReplayingTrack();
+      } else if (restartedSameTrack && sdkTrack?.id !== targetTrack?.trackId) {
+        // The previous confirmed target is replaying but the server has already advanced
+        // to a different targetTrack. Skip past this track in Spotify's native queue
+        // so the staged upcoming track (or a direct play) can take over.
+        log(`Previous target ${actualTrack?.title || 'track'} is replaying after server advanced — skipping`);
+        player.nextTrack().catch(() => {});
       }
       log(`Detected end of ${actualTrack?.title || 'track'} — requesting next`);
       requestNextTrack();

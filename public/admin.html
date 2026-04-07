@@ -215,6 +215,47 @@
   .input:focus { border-color: var(--accent); }
   .error-msg { color: var(--red); font-size: 13px; margin-top: 8px; }
 
+  /* Pool */
+  .pool-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+  .pool-section { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 20px; }
+  .pool-section h3 { font-size: 14px; font-weight: 600; margin-bottom: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; }
+  .pool-input-row { display: flex; gap: 8px; }
+  .pool-input-row .input { margin-bottom: 0; flex: 1; }
+  .seed-list { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+  .seed-item { display: flex; align-items: center; justify-content: space-between; background: var(--surface2); padding: 10px 12px; border-radius: 10px; font-size: 14px; }
+  .seed-item .source-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+  .badge-artist { background: rgba(29,185,84,0.15); color: var(--accent); }
+  .badge-genre  { background: rgba(100,100,255,0.15); color: #8b8bff; }
+  .badge-pinned { background: rgba(245,158,11,0.15); color: var(--orange); }
+  .popularity-row { display: flex; align-items: center; gap: 14px; }
+  .popularity-row input[type=range] { flex: 1; accent-color: var(--accent); }
+  .popularity-value { font-size: 20px; font-weight: 700; color: var(--accent); width: 36px; text-align: right; }
+  .pool-track-list { max-height: 420px; overflow-y: auto; margin-top: 12px; }
+  .pool-track-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; transition: background 0.1s; }
+  .pool-track-item:hover { background: var(--surface2); }
+  .pool-track-item img { width: 36px; height: 36px; border-radius: 6px; object-fit: cover; background: #333; flex-shrink: 0; }
+  .pool-track-info { flex: 1; min-width: 0; }
+  .pool-track-info .name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pool-track-info .artist { font-size: 11px; color: var(--muted); }
+  .pool-pop { font-size: 12px; color: var(--muted); width: 32px; text-align: right; flex-shrink: 0; }
+  .pool-header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .pool-header-row h2 { margin-bottom: 0; }
+  .textarea {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    color: var(--text);
+    font-size: 13px;
+    font-family: monospace;
+    outline: none;
+    resize: vertical;
+    min-height: 80px;
+    transition: border-color 0.2s;
+  }
+  .textarea:focus { border-color: var(--accent); }
+
   /* Settings */
   .settings-section { margin-bottom: 32px; }
   .settings-section h3 { font-size: 15px; font-weight: 600; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
@@ -265,6 +306,7 @@
 
     <div class="nav-item active" onclick="showPage('dashboard', this)">📊 Dashboard</div>
     <div class="nav-item" onclick="showPage('queue', this)">🎶 Queue</div>
+    <div class="nav-item" onclick="showPage('pool', this); loadPool()">🎵 Song Pool</div>
     <div class="nav-item" onclick="showPage('settings', this)">⚙️ Settings</div>
     <hr class="sidebar-divider">
     <a href="/host.html" target="_blank" style="text-decoration:none">
@@ -340,6 +382,76 @@
         <tbody id="queueTableBody"></tbody>
       </table>
       <div id="queueEmpty" class="empty-state" style="display:none">Queue is empty</div>
+    </div>
+
+    <!-- Pool -->
+    <div class="page" id="page-pool">
+      <div class="pool-header-row">
+        <h2>Song Pool</h2>
+        <button class="btn btn-ghost" onclick="rebuildPool()">↺ Rebuild Pool</button>
+      </div>
+
+      <div class="pool-stats">
+        <div class="stat-card">
+          <div class="label">Total in pool</div>
+          <div class="value green" id="poolTotal">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Genre tracks</div>
+          <div class="value" id="poolGenreCount">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Artist tracks</div>
+          <div class="value" id="poolArtistCount">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Pinned tracks</div>
+          <div class="value" id="poolPinnedCount">—</div>
+        </div>
+      </div>
+
+      <!-- Popularity Floor -->
+      <div class="pool-section">
+        <h3>Popularity Floor</h3>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Only include genre and artist tracks with a Spotify popularity score at or above this value. Pinned tracks are always included.</p>
+        <div class="popularity-row">
+          <span style="font-size:13px;color:var(--muted)">0</span>
+          <input type="range" min="0" max="100" step="1" id="popularitySlider" oninput="updatePopularityLabel(this.value)">
+          <span style="font-size:13px;color:var(--muted)">100</span>
+          <span class="popularity-value" id="popularityLabel">—</span>
+          <button class="btn btn-primary" onclick="savePopularity()">Apply</button>
+        </div>
+      </div>
+
+      <!-- Artist Seeds -->
+      <div class="pool-section">
+        <h3>Artist Seeds</h3>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Add artists by name. The server fetches their top 10 tracks from Spotify and adds them to the pool.</p>
+        <div class="pool-input-row">
+          <input class="input" id="artistInput" placeholder="Artist name (e.g. The Weeknd)" onkeydown="if(event.key==='Enter')addArtist()">
+          <button class="btn btn-primary" onclick="addArtist()">Add</button>
+        </div>
+        <div class="seed-list" id="artistSeedList"></div>
+      </div>
+
+      <!-- Pinned Tracks -->
+      <div class="pool-section">
+        <h3>Pinned Tracks</h3>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Paste Spotify track IDs, URIs, or share URLs — one per line. These bypass the popularity filter.</p>
+        <textarea class="textarea" id="pinnedInput" placeholder="0VjIjW4GlUZAMYd2vXMi3b&#10;spotify:track:7qiZfU4dY1lWllzX7mPBI3&#10;https://open.spotify.com/track/4LRPiXqCikLlN15c3yImP7"></textarea>
+        <div style="margin-top:10px">
+          <button class="btn btn-primary" onclick="addPinnedTracks()">Add Tracks</button>
+        </div>
+        <div class="seed-list" id="pinnedTrackList"></div>
+      </div>
+
+      <!-- Full Pool Track List -->
+      <div class="pool-section">
+        <h3>All tracks in pool <span id="poolTrackCountLabel" style="font-weight:400;color:var(--muted)"></span></h3>
+        <div class="pool-track-list" id="poolTrackList">
+          <div class="empty-state">Load pool to see tracks</div>
+        </div>
+      </div>
     </div>
 
     <!-- Settings -->
@@ -584,6 +696,166 @@
 
   function esc(str) {
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ─── Pool ─────────────────────────────────────────────────────────────────
+  let poolData = null;
+
+  async function loadPool() {
+    try {
+      const res = await fetch('/api/pool', { headers: { 'x-admin-password': adminPassword } });
+      if (!res.ok) return;
+      poolData = await res.json();
+      renderPool(poolData);
+    } catch (e) { /* silent */ }
+  }
+
+  function renderPool(data) {
+    document.getElementById('poolTotal').textContent        = data.totalInPool;
+    document.getElementById('poolGenreCount').textContent  = `${data.sources.genre.passing} / ${data.sources.genre.total}`;
+    document.getElementById('poolArtistCount').textContent = `${data.sources.artist.passing} / ${data.sources.artist.total}`;
+    document.getElementById('poolPinnedCount').textContent = data.sources.pinned.total;
+
+    const slider = document.getElementById('popularitySlider');
+    slider.value = data.settings.minPopularity;
+    document.getElementById('popularityLabel').textContent = data.settings.minPopularity;
+
+    // Artist seeds
+    const seedList = document.getElementById('artistSeedList');
+    if (data.artistSeeds.length === 0) {
+      seedList.innerHTML = '<div style="font-size:13px;color:var(--muted);margin-top:8px">No artist seeds yet</div>';
+    } else {
+      seedList.innerHTML = data.artistSeeds.map(s => `
+        <div class="seed-item">
+          <span>${esc(s.artistName)}</span>
+          <button class="btn btn-danger" style="padding:5px 12px;font-size:12px" onclick="removeArtist('${esc(s.artistId)}')">Remove</button>
+        </div>`).join('');
+    }
+
+    // Pinned tracks
+    const pinnedList = document.getElementById('pinnedTrackList');
+    const pinned = data.tracks.filter(t => t.source === 'pinned');
+    if (pinned.length === 0) {
+      pinnedList.innerHTML = '<div style="font-size:13px;color:var(--muted);margin-top:8px">No pinned tracks yet</div>';
+    } else {
+      pinnedList.innerHTML = pinned.map(t => `
+        <div class="seed-item">
+          <div style="display:flex;align-items:center;gap:10px;min-width:0">
+            <img src="${esc(t.albumArt||'')}" style="width:32px;height:32px;border-radius:6px;object-fit:cover;background:#333;flex-shrink:0">
+            <div style="min-width:0">
+              <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.title)}</div>
+              <div style="font-size:11px;color:var(--muted)">${esc(t.artist)}</div>
+            </div>
+          </div>
+          <button class="btn btn-danger" style="padding:5px 12px;font-size:12px;flex-shrink:0" onclick="removePinnedTrack('${esc(t.trackId)}')">Remove</button>
+        </div>`).join('');
+    }
+
+    // Full track list
+    const trackList = document.getElementById('poolTrackList');
+    document.getElementById('poolTrackCountLabel').textContent = `(${data.tracks.length})`;
+    if (data.tracks.length === 0) {
+      trackList.innerHTML = '<div class="empty-state">Pool is empty</div>';
+    } else {
+      trackList.innerHTML = data.tracks.map(t => `
+        <div class="pool-track-item">
+          <img src="${esc(t.albumArt||'')}" alt="">
+          <div class="pool-track-info">
+            <div class="name">${esc(t.title)}</div>
+            <div class="artist">${esc(t.artist)}</div>
+          </div>
+          <span class="source-badge ${t.source === 'pinned' ? 'badge-pinned' : t.source === 'artist' ? 'badge-artist' : 'badge-genre'}">${t.source}</span>
+          <span class="pool-pop">${t.popularity}</span>
+          <button class="remove-btn" onclick="removeFromPool('${esc(t.trackId)}')">✕</button>
+        </div>`).join('');
+    }
+  }
+
+  function updatePopularityLabel(val) {
+    document.getElementById('popularityLabel').textContent = val;
+  }
+
+  async function savePopularity() {
+    const val = parseInt(document.getElementById('popularitySlider').value);
+    const res = await fetch('/api/pool/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+      body: JSON.stringify({ minPopularity: val }),
+    });
+    if (res.ok) await loadPool();
+  }
+
+  async function addArtist() {
+    const name = document.getElementById('artistInput').value.trim();
+    if (!name) return;
+    const btn = event.target.closest ? event.target : document.querySelector('#artistInput + button');
+    document.getElementById('artistInput').value = '';
+    const res = await fetch('/api/pool/artists', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+      body: JSON.stringify({ name }),
+    });
+    if (res.ok) {
+      await loadPool();
+    } else {
+      const { error } = await res.json();
+      alert(error || 'Failed to add artist');
+    }
+  }
+
+  async function removeArtist(artistId) {
+    const res = await fetch(`/api/pool/artists/${encodeURIComponent(artistId)}`, {
+      method: 'DELETE',
+      headers: { 'x-admin-password': adminPassword },
+    });
+    if (res.ok) await loadPool();
+  }
+
+  async function addPinnedTracks() {
+    const raw = document.getElementById('pinnedInput').value.trim();
+    if (!raw) return;
+    const trackIds = raw.split(/\n|,/).map(s => s.trim()).filter(Boolean);
+    const res = await fetch('/api/pool/tracks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+      body: JSON.stringify({ trackIds }),
+    });
+    if (res.ok) {
+      document.getElementById('pinnedInput').value = '';
+      await loadPool();
+    } else {
+      const { error } = await res.json();
+      alert(error || 'Failed to add tracks');
+    }
+  }
+
+  async function removePinnedTrack(trackId) {
+    const res = await fetch(`/api/pool/tracks/${encodeURIComponent(trackId)}`, {
+      method: 'DELETE',
+      headers: { 'x-admin-password': adminPassword },
+    });
+    if (res.ok) await loadPool();
+  }
+
+  async function removeFromPool(trackId) {
+    const res = await fetch(`/api/pool/cache/${encodeURIComponent(trackId)}`, {
+      method: 'DELETE',
+      headers: { 'x-admin-password': adminPassword },
+    });
+    if (res.ok) await loadPool();
+  }
+
+  async function rebuildPool() {
+    const btn = document.querySelector('.pool-header-row .btn-ghost');
+    btn.textContent = 'Rebuilding…';
+    btn.disabled = true;
+    const res = await fetch('/api/pool/rebuild', {
+      method: 'POST',
+      headers: { 'x-admin-password': adminPassword },
+    });
+    btn.textContent = '↺ Rebuild Pool';
+    btn.disabled = false;
+    if (res.ok) await loadPool();
   }
 </script>
 </body>
