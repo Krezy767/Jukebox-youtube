@@ -356,6 +356,7 @@
   let switchAfterFadeTimer = null;
   let fadeStartedForTrackId = null;
   let switchDoneForTrackId = null;
+  let lastFadeSwitchCompletedAt = 0;
 
   function cancelFades(restoreVolume = false) {
     if (fadeOutTimer) { clearInterval(fadeOutTimer); fadeOutTimer = null; }
@@ -546,6 +547,12 @@
         setTimeout(() => {
           if (targetTrack?.trackId !== foreignRecoveryTrackId) return;
           if (manualSwitchInFlight) return;
+          // If a fade switch just fired, its spotifyPlay command is already in flight —
+          // don't interfere with requestNextTrack or recovery playback
+          if (Date.now() - lastFadeSwitchCompletedAt < 3000) {
+            log(`Foreign track during fade switch — waiting for in-flight play command`);
+            return;
+          }
           if (pendingAdvanceAfterForeignTrackId === actualTrack?.trackId || shouldAdvanceAfterForeignJump()) {
             pendingAdvanceAfterForeignTrackId = null;
             lastForeignTrackPauseAt = 0;
@@ -793,6 +800,7 @@
           if (switchDoneForTrackId === trackAtFadeStart.trackId) return;
           if (!upcomingTrack?.trackId || playbackCommandInFlight || manualSwitchInFlight) return;
           switchDoneForTrackId = trackAtFadeStart.trackId;
+          lastFadeSwitchCompletedAt = Date.now();
           const scheduledUpcoming = upcomingTrack;
           log(`Switching to next: ${scheduledUpcoming.title}`);
           runPlaybackCommand(async () => {
