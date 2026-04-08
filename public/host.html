@@ -357,6 +357,7 @@
   let fadeStartedForTrackId = null;
   let switchDoneForTrackId = null;
   let lastFadeSwitchCompletedAt = 0;
+  let fadeSwitchedToTrackId = null;
 
   function cancelFades(restoreVolume = false) {
     if (fadeOutTimer) { clearInterval(fadeOutTimer); fadeOutTimer = null; }
@@ -521,6 +522,14 @@
   function isForeignSdkTrack() {
     if (!actualTrack?.trackId) return false;
     if (confirmedTargetGrace && Date.now() < confirmedTargetGrace.expiresAt && actualTrack.trackId === confirmedTargetGrace.trackId) {
+      return false;
+    }
+    // Natural advance ack was just sent — server hasn't responded yet, don't treat as foreign
+    if (pendingNaturalAdvanceTrackId && actualTrack.trackId === pendingNaturalAdvanceTrackId) {
+      return false;
+    }
+    // Fade switch just fired spotifyPlay for this track — server hasn't updated targetTrack yet
+    if (fadeSwitchedToTrackId && actualTrack.trackId === fadeSwitchedToTrackId && Date.now() - lastFadeSwitchCompletedAt < 5000) {
       return false;
     }
     const matchesCurrent = currentServerTrack?.trackId && actualTrack.trackId === currentServerTrack.trackId;
@@ -801,6 +810,7 @@
           switchDoneForTrackId = trackAtFadeStart.trackId;
           lastFadeSwitchCompletedAt = Date.now();
           const scheduledUpcoming = upcomingTrack;
+          fadeSwitchedToTrackId = scheduledUpcoming.trackId;
           log(`Switching to next: ${scheduledUpcoming.title}`);
           runPlaybackCommand(async () => {
             await transferPlaybackToHost(false);
