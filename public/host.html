@@ -336,6 +336,7 @@
   let foreignRecoveryTrackId = null;
   let confirmedTargetGrace = null;
   let lastNextRequestTrackId = null;
+  let lastSdkTrackId = null; // raw Spotify SDK track ID (pre-relink-normalization)
   let userPausedPlayback = false;
   let previousPlaybackSnapshot = { trackId: null, position: 0, duration: 0, paused: true };
   let pendingNaturalAdvanceTrackId = null;
@@ -646,17 +647,31 @@
     const sdkTrack = state.track_window?.current_track;
     if (sdkTrack?.id) {
       const previousTrackId = actualTrack?.trackId || null;
-      const changedTrack = sdkTrack.id !== actualTrack?.trackId;
+      const changedTrack = sdkTrack.id !== lastSdkTrackId; // use raw SDK ID to detect physical track changes
+      lastSdkTrackId = sdkTrack.id;
       const previousTrackWasNearEnd =
         previousPlaybackSnapshot.trackId === previousTrackId &&
         previousPlaybackSnapshot.duration > 0 &&
         previousPlaybackSnapshot.position >= previousPlaybackSnapshot.duration - 15000;
+
+      // Spotify track relinking: SDK plays a different version of the target (different ID, same title+artist).
+      // Normalize trackId to the server's target ID so all downstream checks work correctly.
+      const sdkArtist = sdkTrack.artists.map(a => a.name).join(', ');
+      const isRelinkOfTarget = !!(
+        targetTrack?.trackId &&
+        sdkTrack.id !== targetTrack.trackId &&
+        sdkTrack.name === targetTrack.title &&
+        sdkArtist === targetTrack.artist
+      );
+      const resolvedTrackId = isRelinkOfTarget ? targetTrack.trackId : sdkTrack.id;
+      if (isRelinkOfTarget) log(`Track relink: SDK ${sdkTrack.id} → using target ID ${targetTrack.trackId} (${sdkTrack.name})`);
+
       actualTrack = {
-        trackId: sdkTrack.id,
+        trackId: resolvedTrackId,
         title: sdkTrack.name,
-        artist: sdkTrack.artists.map(a => a.name).join(', '),
+        artist: sdkArtist,
         albumArt: sdkTrack.album.images[0]?.url || sdkTrack.album.images[1]?.url || '',
-        isFallback: targetTrack?.trackId === sdkTrack.id ? !!targetTrack?.isFallback : !!currentServerTrack?.isFallback,
+        isFallback: resolvedTrackId === targetTrack?.trackId ? !!targetTrack?.isFallback : !!currentServerTrack?.isFallback,
       };
 
       if (changedTrack) {
@@ -709,13 +724,13 @@
         return;
       }
 
-      if (targetTrack?.trackId === sdkTrack.id) {
+      if (actualTrack?.trackId === targetTrack?.trackId) {
         lastForeignTrackPauseAt = 0;
         pausedForeignTrackId = null;
         foreignRecoveryTrackId = null;
         pendingAdvanceAfterForeignTrackId = null;
-        markConfirmedTargetGrace(sdkTrack.id);
-        if (previousTrackId !== sdkTrack.id) {
+        markConfirmedTargetGrace(actualTrack.trackId);
+        if (previousTrackId !== actualTrack.trackId) {
           currentTargetStartedAt = Date.now();
         }
         if (!state.paused) {
@@ -735,14 +750,14 @@
       }
     }
 
-    const sameTrackAsBefore = previousPlaybackSnapshot.trackId && previousPlaybackSnapshot.trackId === sdkTrack?.id;
+    const sameTrackAsBefore = previousPlaybackSnapshot.trackId && previousPlaybackSnapshot.trackId === actualTrack?.trackId;
     const wasNearEnd = previousPlaybackSnapshot.duration > 0 &&
       previousPlaybackSnapshot.position >= previousPlaybackSnapshot.duration - 15000;
     const restartedSameTrack = sameTrackAsBefore && wasNearEnd && state.position < 2000;
     const replayInsteadOfAdvance =
       restartedSameTrack &&
       !!upcomingTrack?.trackId &&
-      sdkTrack?.id === targetTrack?.trackId;
+      actualTrack?.trackId === targetTrack?.trackId;
     const stoppedAfterEnd = sameTrackAsBefore && wasNearEnd && state.paused && state.position < 2000;
 
     if (shouldStartSilentHandoff(state) && !fadeOutTimer) {
@@ -753,7 +768,7 @@
     } else if (!userPausedPlayback && (replayInsteadOfAdvance || restartedSameTrack || stoppedAfterEnd)) {
       if (replayInsteadOfAdvance) {
         pauseReplayingTrack();
-      } else if (restartedSameTrack && sdkTrack?.id !== targetTrack?.trackId) {
+      } else if (restartedSameTrack && actualTrack?.trackId !== targetTrack?.trackId) {
         // The previous confirmed target is replaying but the server has already advanced
         // to a different targetTrack. Skip past this track in Spotify's native queue
         // so the staged upcoming track (or a direct play) can take over.
@@ -790,7 +805,7 @@
     }
 
     previousPlaybackSnapshot = {
-      trackId: sdkTrack?.id || null,
+      trackId: actualTrack?.trackId || null,
       position: state.position || 0,
       duration: state.duration || 0,
       paused: !!state.paused,
