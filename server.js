@@ -11,7 +11,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-app.use(express.json());
+app.use(express.json({ limit: '5mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/healthz', (req, res) => {
@@ -31,14 +31,17 @@ let recentlyPlayed = new Map(); // trackId -> timestamp of when it was played
 const SEED_GENRES = ['pop', 'rock', 'electronic', 'hip-hop', 'jazz', 'ambient'];
 
 // ─── Pool State ───────────────────────────────────────────────────────────────
+let poolMode = 'both'; // 'playlist' | 'discovery' | 'both'
 let poolSettings = {
   minPopularity: parseInt(process.env.MIN_POPULARITY) || 0,
 };
 let artistSeeds = []; // [{ artistId, artistName }]
+let csvPlaylists = []; // [{ name, addedAt, tracks: [...] }]
 let poolSources = {
-  genre: [],   // tracks from genre keyword search (with popularity)
-  artist: [],  // tracks from artist top-tracks (with popularity)
-  pinned: [],  // manually added tracks (bypass popularity filter)
+  csv:    [],  // merged tracks from all uploaded CSV playlists
+  genre:  [],  // tracks from genre keyword search (with popularity)
+  artist: [],  // tracks from artist search (with popularity)
+  pinned: [],  // manually pinned tracks (bypass popularity filter)
 };
 
 
@@ -55,30 +58,58 @@ const STATIC_FALLBACK_TRACKS = [
   { trackId: '3PfIrDoz19wz7qK7tYeu62', title: "Don't Start Now", artist: 'Dua Lipa', album: 'Future Nostalgia', albumArt: null, explicit: false },
 ];
 
-function mergePool() {
+function rebuildCsvSource() {
   const seen = new Set();
-  const merged = [];
-  // Pinned tracks always included regardless of popularity
-  for (const track of poolSources.pinned) {
-    if (!seen.has(track.trackId)) {
-      seen.add(track.trackId);
-      merged.push({ ...track, source: 'pinned' });
-    }
-  }
-  // Artist and genre tracks filtered by popularity floor
-  for (const source of ['artist', 'genre']) {
-    for (const track of poolSources[source]) {
-      if (!seen.has(track.trackId) && (track.popularity || 0) >= poolSettings.minPopularity) {
+  poolSources.csv = [];
+  for (const playlist of csvPlaylists) {
+    for (const track of playlist.tracks) {
+      if (!seen.has(track.trackId)) {
         seen.add(track.trackId);
-        merged.push({ ...track, source });
+        poolSources.csv.push(track);
       }
     }
   }
+}
+
+function mergePool() {
+  const seen = new Set();
+  const merged = [];
+  const includeCsv       = poolMode === 'playlist' || poolMode === 'both';
+  const includeDiscovery = poolMode === 'discovery' || poolMode === 'both';
+  const passFloor = t => t.popularity === null || t.popularity === undefined || t.popularity >= poolSettings.minPopularity;
+
+  if (includeCsv) {
+    // CSV tracks: popularity floor applies (CSV has real scores from Exportify)
+    for (const track of poolSources.csv) {
+      if (!seen.has(track.trackId) && passFloor(track)) {
+        seen.add(track.trackId);
+        merged.push({ ...track, source: 'csv' });
+      }
+    }
+  }
+
+  if (includeDiscovery) {
+    // Pinned always included regardless of popularity
+    for (const track of poolSources.pinned) {
+      if (!seen.has(track.trackId)) {
+        seen.add(track.trackId);
+        merged.push({ ...track, source: 'pinned' });
+      }
+    }
+    // Artist and genre filtered by popularity floor
+    for (const source of ['artist', 'genre']) {
+      for (const track of poolSources[source]) {
+        if (!seen.has(track.trackId) && passFloor(track)) {
+          seen.add(track.trackId);
+          merged.push({ ...track, source });
+        }
+      }
+    }
+  }
+
   playlistCache.bar = shuffleArray(merged);
   suggestionRotationIndex = 0;
-  const genreCount = poolSources.genre.filter(t => (t.popularity || 0) >= poolSettings.minPopularity).length;
-  const artistCount = poolSources.artist.filter(t => (t.popularity || 0) >= poolSettings.minPopularity).length;
-  console.log(`✓ Pool merged: ${merged.length} tracks (genre: ${genreCount}, artist: ${artistCount}, pinned: ${poolSources.pinned.length})`);
+  console.log(`✓ Pool merged: ${merged.length} tracks [mode: ${poolMode}] (csv: ${poolSources.csv.filter(passFloor).length}, genre: ${poolSources.genre.filter(passFloor).length}, artist: ${poolSources.artist.filter(passFloor).length}, pinned: ${poolSources.pinned.length})`);
 }
 
 function shuffleArray(arr) {
@@ -139,6 +170,8 @@ const SCOPES = [
   'user-modify-playback-state',
   'user-read-playback-state',
   'user-library-read',
+  'playlist-read-private',
+  'playlist-read-collaborative',
 ].join(' ');
 
 // ─── Spotify Token Helpers ────────────────────────────────────────────────────
@@ -207,7 +240,9 @@ async function buildCacheFromSearch() {
     const collected = [];
     for (const q of searchQueries) {
       try {
-        const searchUrl = `https://api.spotify.com/v1/search?q=${encodeURIComponent(q)}&type=track&limit=10`;
+        // Use genre: filter (same as guest search) — returns mainstream tracks
+        // and is more likely to include popularity data than plain text search
+        const searchUrl = `https://api.spotify.com/v1/search?q=genre:${encodeURIComponent(q)}&type=track&limit=10&market=US`;
         const { data } = await axios.get(searchUrl, {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -222,7 +257,7 @@ async function buildCacheFromSearch() {
             album: t.album.name,
             albumArt: t.album.images[1]?.url || t.album.images[0]?.url || null,
             explicit: t.explicit,
-            popularity: t.popularity || 0,
+            popularity: typeof t.popularity === 'number' ? t.popularity : null,
             uri: t.uri,
           });
         }
@@ -256,11 +291,12 @@ async function buildCacheFromArtists() {
   const collected = [];
   for (const seed of artistSeeds) {
     try {
+      // /artists/{id}/top-tracks is restricted on lower API tiers — use search instead
       const { data } = await axios.get(
-        `https://api.spotify.com/v1/artists/${seed.artistId}/top-tracks?market=US`,
+        `https://api.spotify.com/v1/search?q=artist:${encodeURIComponent(seed.artistName)}&type=track&limit=10&market=US`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      for (const t of data.tracks || []) {
+      for (const t of data.tracks?.items || []) {
         if (!t?.id) continue;
         if (BLOCK_EXPLICIT && t.explicit) continue;
         collected.push({
@@ -270,14 +306,14 @@ async function buildCacheFromArtists() {
           album: t.album.name,
           albumArt: t.album.images[1]?.url || t.album.images[0]?.url || null,
           explicit: t.explicit,
-          popularity: t.popularity || 0,
+          popularity: typeof t.popularity === 'number' ? t.popularity : null,
           uri: t.uri,
           seedArtistId: seed.artistId,
         });
       }
-      console.log(`✓ Fetched top tracks for artist: ${seed.artistName}`);
+      console.log(`✓ Fetched tracks for artist: ${seed.artistName}`);
     } catch (err) {
-      console.warn(`Failed to fetch top tracks for ${seed.artistName}:`, err.response?.data?.error?.message || err.message);
+      console.warn(`Failed to fetch tracks for ${seed.artistName}:`, err.response?.data?.error?.message || err.message);
     }
   }
   const seen = new Set();
@@ -430,8 +466,10 @@ app.get('/auth/login', (req, res) => {
 });
 
 app.get('/auth/callback', async (req, res) => {
-  const { code, error } = req.query;
-  if (error) return res.redirect('/host.html?auth=error');
+  const { code, error, state } = req.query;
+  if (error) return res.redirect(state === 'pkce' ? '/admin.html?spotify=error' : '/host.html?auth=error');
+  // PKCE flow: pass code back to admin.html — browser does the token exchange
+  if (state === 'pkce') return res.redirect(`/admin.html?code=${encodeURIComponent(code)}`);
   try {
     const { data } = await axios.post(
       'https://accounts.spotify.com/api/token',
@@ -447,6 +485,10 @@ app.get('/auth/callback', async (req, res) => {
     console.error('Auth error:', err.response?.data);
     res.redirect('/host.html?auth=error');
   }
+});
+
+app.get('/api/config', (req, res) => {
+  res.json({ clientId: CLIENT_ID, redirectUri: REDIRECT_URI });
 });
 
 app.get('/auth/token', async (req, res) => {
@@ -566,13 +608,125 @@ app.get('/api/suggestions', async (req, res) => {
   }
 });
 
+// ─── Spotify Playlist Helpers ─────────────────────────────────────────────────
+async function fetchAllUserPlaylists(token) {
+  const playlists = [];
+  let url = 'https://api.spotify.com/v1/me/playlists?limit=50';
+  while (url) {
+    const { data } = await axios.get(url, { headers: { Authorization: `Bearer ${token}` } });
+    playlists.push(...(data.items || []).filter(Boolean));
+    url = data.next || null;
+  }
+  return playlists;
+}
+
+async function fetchPlaylistTracks(token, playlistId) {
+  // Fetch first page — response includes total count
+  const { data: firstPage } = await axios.get(
+    `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&offset=0`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  const total = firstPage.total || 0;
+  console.log(`[spotify-import] playlist ${playlistId}: total=${total}`);
+  const allItems = [...(firstPage.items || [])];
+
+  // Fetch remaining pages concurrently if needed
+  if (total > 100) {
+    const offsets = [];
+    for (let i = 100; i < total; i += 100) offsets.push(i);
+    const pages = await Promise.all(offsets.map(offset =>
+      axios.get(
+        `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&offset=${offset}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      ).then(r => r.data.items || [])
+    ));
+    for (const page of pages) allItems.push(...page);
+  }
+
+  const tracks = [];
+  for (const item of allItems) {
+    const t = item?.track;
+    if (!t?.id) continue; // skip null tracks and episodes
+    if (BLOCK_EXPLICIT && t.explicit) continue;
+    tracks.push({
+      trackId:   t.id,
+      title:     t.name,
+      artist:    t.artists.map(a => a.name).join(', '),
+      album:     t.album.name,
+      albumArt:  t.album.images[1]?.url || t.album.images[0]?.url || null,
+      explicit:  t.explicit,
+      popularity: typeof t.popularity === 'number' ? t.popularity : null,
+      uri:       t.uri,
+    });
+  }
+  console.log(`[spotify-import] playlist ${playlistId}: mapped ${tracks.length} playable tracks`);
+  return tracks;
+}
+
+// ─── CSV Parser (Exportify format) ───────────────────────────────────────────
+function parseCSVLine(line) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') { current += '"'; i++; }
+      else inQuotes = !inQuotes;
+    } else if (ch === ',' && !inQuotes) {
+      result.push(current); current = '';
+    } else {
+      current += ch;
+    }
+  }
+  result.push(current);
+  return result;
+}
+
+function parseExportifyCSV(csvText) {
+  const lines = csvText.split('\n').map(l => l.trimEnd()).filter(l => l.length > 0);
+  if (lines.length < 2) return [];
+  const tracks = [];
+  for (let i = 1; i < lines.length; i++) {
+    try {
+      const cols = parseCSVLine(lines[i]);
+      if (cols.length < 16) continue;
+      // Col 0: Track URI  e.g. "spotify:track:2E2ZVy2fxslpAUgbb4zu84"
+      const uri = cols[0];
+      const trackId = uri.includes(':') ? uri.split(':').pop() : uri;
+      if (!trackId || trackId.length < 10) continue;
+      const explicit = cols[14].toLowerCase() === 'true';
+      if (BLOCK_EXPLICIT && explicit) continue;
+      const popularityRaw = cols[15];
+      const popularity = popularityRaw !== '' && !isNaN(parseInt(popularityRaw, 10))
+        ? parseInt(popularityRaw, 10) : null;
+      // Col 9: Album Image URL
+      tracks.push({
+        trackId,
+        title:    cols[1],
+        artist:   cols[3],
+        album:    cols[5],
+        albumArt: cols[9] || null,
+        explicit,
+        popularity,
+        uri: `spotify:track:${trackId}`,
+      });
+    } catch (_) { /* skip malformed line */ }
+  }
+  return tracks;
+}
+
 // ─── Pool Management ──────────────────────────────────────────────────────────
 app.get('/api/pool', requireAdmin, (req, res) => {
-  const passing = (source) => poolSources[source].filter(t => (t.popularity || 0) >= poolSettings.minPopularity).length;
+  const passFloor = t => t.popularity === null || t.popularity === undefined || t.popularity >= poolSettings.minPopularity;
+  const passing = (source) => poolSources[source].filter(passFloor).length;
   res.json({
+    mode: poolMode,
     settings: poolSettings,
     artistSeeds,
+    csvPlaylists: csvPlaylists.map(p => ({ name: p.name, trackCount: p.tracks.length, addedAt: p.addedAt })),
     sources: {
+      csv:    { total: poolSources.csv.length,    passing: passing('csv') },
       genre:  { total: poolSources.genre.length,  passing: passing('genre') },
       artist: { total: poolSources.artist.length, passing: passing('artist') },
       pinned: { total: poolSources.pinned.length },
@@ -583,11 +737,61 @@ app.get('/api/pool', requireAdmin, (req, res) => {
       title:      t.title,
       artist:     t.artist,
       albumArt:   t.albumArt,
-      popularity: t.popularity || 0,
+      popularity: t.popularity ?? null,
       source:     t.source || 'genre',
       explicit:   t.explicit,
     })),
   });
+});
+
+app.put('/api/pool/mode', requireAdmin, (req, res) => {
+  const { mode } = req.body;
+  if (!['playlist', 'discovery', 'both'].includes(mode)) {
+    return res.status(400).json({ error: 'mode must be playlist, discovery, or both' });
+  }
+  poolMode = mode;
+  mergePool();
+  res.json({ success: true, mode, totalInPool: playlistCache.bar.length });
+});
+
+app.post('/api/pool/csv', requireAdmin, (req, res) => {
+  const { name, csv } = req.body;
+  if (!name || !csv) return res.status(400).json({ error: 'name and csv required' });
+  if (csvPlaylists.find(p => p.name === name)) {
+    return res.status(409).json({ error: 'A playlist with that name already exists — remove it first' });
+  }
+  const tracks = parseExportifyCSV(csv);
+  if (tracks.length === 0) return res.status(400).json({ error: 'No valid tracks found in CSV' });
+  csvPlaylists.push({ name, addedAt: Date.now(), tracks });
+  rebuildCsvSource();
+  mergePool();
+  console.log(`✓ CSV playlist "${name}" loaded: ${tracks.length} tracks`);
+  res.json({ success: true, name, trackCount: tracks.length, totalInPool: playlistCache.bar.length });
+});
+
+// Browser fetches tracks via PKCE token, sends them here
+app.post('/api/pool/spotify-playlist/:playlistId', requireAdmin, (req, res) => {
+  const { name, tracks } = req.body;
+  if (!name) return res.status(400).json({ error: 'name required' });
+  if (!Array.isArray(tracks) || tracks.length === 0) return res.status(400).json({ error: 'No tracks provided' });
+  if (csvPlaylists.find(p => p.name === name)) {
+    return res.status(409).json({ error: 'A playlist with that name already exists — remove it first' });
+  }
+  csvPlaylists.push({ name, addedAt: Date.now(), tracks });
+  rebuildCsvSource();
+  mergePool();
+  console.log(`✓ Spotify playlist "${name}" imported: ${tracks.length} tracks`);
+  res.json({ success: true, name, trackCount: tracks.length, totalInPool: playlistCache.bar.length });
+});
+
+app.delete('/api/pool/csv/:name', requireAdmin, (req, res) => {
+  const name = decodeURIComponent(req.params.name);
+  const before = csvPlaylists.length;
+  csvPlaylists = csvPlaylists.filter(p => p.name !== name);
+  if (csvPlaylists.length === before) return res.status(404).json({ error: 'Playlist not found' });
+  rebuildCsvSource();
+  mergePool();
+  res.json({ success: true, totalInPool: playlistCache.bar.length });
 });
 
 app.put('/api/pool/settings', requireAdmin, (req, res) => {
@@ -695,7 +899,7 @@ app.post('/api/pool/tracks', requireAdmin, async (req, res) => {
           album: t.album.name,
           albumArt: t.album.images[1]?.url || t.album.images[0]?.url || null,
           explicit: t.explicit,
-          popularity: t.popularity || 0,
+          popularity: t.popularity ?? null,
           uri: t.uri,
         });
       }
