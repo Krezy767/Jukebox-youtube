@@ -594,12 +594,9 @@
   }
 
   function scheduleStageUpcoming() {
-    if (!targetTrack?.trackId || actualTrack?.trackId !== targetTrack.trackId) return;
-    if (stageUpcomingTimer) return; // already scheduled, don't reset
-    stageUpcomingTimer = setTimeout(() => {
-      stageUpcomingTimer = null;
-      stageUpcomingTrack();
-    }, 1200);
+    // Staging upcoming tracks via spotifyQueue creates zombie entries in Spotify's
+    // native queue that persist after direct spotifyPlay switches. Removed to prevent
+    // player.nextTrack() from advancing through stale entries.
   }
 
   function setStatus(id, dotId, state, text) {
@@ -776,11 +773,13 @@
       if (replayInsteadOfAdvance) {
         pauseReplayingTrack();
       } else if (restartedSameTrack && actualTrack?.trackId !== targetTrack?.trackId) {
-        // The previous confirmed target is replaying but the server has already advanced
-        // to a different targetTrack. Skip past this track in Spotify's native queue
-        // so the staged upcoming track (or a direct play) can take over.
-        log(`Previous target ${actualTrack?.title || 'track'} is replaying after server advanced — skipping`);
-        player.nextTrack().catch(() => {});
+        // The previous confirmed target is replaying but the server has already advanced.
+        // Use spotifyPlay directly instead of player.nextTrack() to avoid advancing
+        // through stale zombie entries in Spotify's native queue.
+        log(`Previous target ${actualTrack?.title || 'track'} is replaying after server advanced — playing target directly`);
+        runPlaybackCommand(async () => {
+          await spotifyPlay(trackUri(targetTrack));
+        }).catch(() => {});
       }
       log(`Detected end of ${actualTrack?.title || 'track'} — requesting next`);
       requestNextTrack();
