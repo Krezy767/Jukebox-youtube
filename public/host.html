@@ -544,6 +544,12 @@
   async function pauseForeignPlayback() {
     if (!player || !actualTrack?.trackId) return;
     if (Date.now() - lastForeignTrackPauseAt < 5000) return;
+    // After a fade switch, spotifyPlay is already in-flight — don't pause anything yet.
+    // Spotify may cycle through queue items before our command takes effect.
+    if (Date.now() - lastFadeSwitchCompletedAt < 4000) {
+      log(`Suppressing foreign pause during fade switch window: ${actualTrack.title}`);
+      return;
+    }
     lastForeignTrackPauseAt = Date.now();
     setDebugCommand(`pause foreign: ${actualTrack.title}`);
     try {
@@ -635,6 +641,31 @@
     return mins + ':' + secs.toString().padStart(2, '0');
   }
 
+  function tryStartFade(position, duration, paused) {
+    if (paused || !duration || !actualTrack?.trackId) return;
+    if (actualTrack.trackId !== targetTrack?.trackId) return;
+    if (!upcomingTrack?.trackId) return;
+    if (fadeStartedForTrackId === actualTrack.trackId) return;
+    const remaining = duration - position;
+    if (remaining <= 0 || remaining > FADE_OUT_DURATION_MS) return;
+    fadeStartedForTrackId = actualTrack.trackId;
+    const trackAtFadeStart = actualTrack;
+    startFadeOut(() => {
+      // Fired 200ms after fade reaches 0 — guaranteed silence
+      if (switchDoneForTrackId === trackAtFadeStart.trackId) return;
+      if (!upcomingTrack?.trackId || playbackCommandInFlight || manualSwitchInFlight) return;
+      switchDoneForTrackId = trackAtFadeStart.trackId;
+      lastFadeSwitchCompletedAt = Date.now();
+      const scheduledUpcoming = upcomingTrack;
+      fadeSwitchedToTrackId = scheduledUpcoming.trackId;
+      log(`Switching to next: ${scheduledUpcoming.title}`);
+      runPlaybackCommand(async () => {
+        await player?.setVolume(0);
+        await spotifyPlay(trackUri(scheduledUpcoming));
+      }).catch(() => {});
+    });
+  }
+
   function updateProgress(state) {
     if (state) {
       lastProgressState = {
@@ -650,6 +681,8 @@
     const paused = lastProgressState.paused ?? true;
     document.getElementById('progressText').textContent = `${formatTime(position)} / ${formatTime(duration)}`;
     document.getElementById('playPauseBtn').textContent = paused ? '▶ Play' : '⏸ Pause';
+    // Check fade trigger using interpolated position (250ms resolution vs 1s watchdog)
+    tryStartFade(position, duration, paused);
   }
 
   async function handlePlayerState(state) {
@@ -785,41 +818,22 @@
         // The previous confirmed target is replaying but the server has already advanced.
         // Use spotifyPlay directly instead of player.nextTrack() to avoid advancing
         // through stale zombie entries in Spotify's native queue.
+        // Don't call requestNextTrack — targetTrack is already the next song; another
+        // round-trip would regress the server to an earlier track.
         log(`Previous target ${actualTrack?.title || 'track'} is replaying after server advanced — playing target directly`);
         runPlaybackCommand(async () => {
           await spotifyPlay(trackUri(targetTrack));
         }).catch(() => {});
+        updateDebugPanel();
+        return;
       }
       log(`Detected end of ${actualTrack?.title || 'track'} — requesting next`);
       requestNextTrack();
     }
 
-    // Fade out when approaching end of the confirmed target track
-    if (!state.paused && state.duration > 0 &&
-        actualTrack?.trackId && actualTrack.trackId === targetTrack?.trackId) {
-      const remaining = state.duration - state.position;
-
-      if (remaining > 0 && remaining <= FADE_OUT_DURATION_MS &&
-          fadeStartedForTrackId !== actualTrack.trackId) {
-        fadeStartedForTrackId = actualTrack.trackId;
-        const trackAtFadeStart = actualTrack;
-        startFadeOut(() => {
-          // Fired 200ms after fade reaches 0 — guaranteed silence
-          if (switchDoneForTrackId === trackAtFadeStart.trackId) return;
-          if (!upcomingTrack?.trackId || playbackCommandInFlight || manualSwitchInFlight) return;
-          switchDoneForTrackId = trackAtFadeStart.trackId;
-          lastFadeSwitchCompletedAt = Date.now();
-          const scheduledUpcoming = upcomingTrack;
-          fadeSwitchedToTrackId = scheduledUpcoming.trackId;
-          log(`Switching to next: ${scheduledUpcoming.title}`);
-          runPlaybackCommand(async () => {
-            await transferPlaybackToHost(false);
-            await player?.setVolume(0);
-            await spotifyPlay(trackUri(scheduledUpcoming));
-          }).catch(() => {});
-        });
-      }
-    }
+    // Fade trigger also runs in updateProgress (250ms interpolated) — call here
+    // for immediate response on SDK state events (e.g. seek back into fade window).
+    tryStartFade(state.position, state.duration, state.paused);
 
     previousPlaybackSnapshot = {
       trackId: actualTrack?.trackId || null,
