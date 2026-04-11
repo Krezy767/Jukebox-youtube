@@ -5,6 +5,7 @@ const { Server } = require('socket.io');
 const axios = require('axios');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
+const fs = require('fs');
 const { spawn } = require('child_process');
 
 const app = express();
@@ -28,6 +29,40 @@ let recentlyPlayed = new Map(); // trackId -> timestamp of when it was played
 let recentArtists  = [];        // last 3 artist names (normalized), for spread enforcement
 const viewCountCache = new Map(); // trackId -> YouTube view count, persists across rebuilds
 const lastFmCache    = new Map(); // trackId -> { energy, danceability }, persists across rebuilds
+const acousticBrainzCache = new Map(); // trackId -> { bpm, mood_party, danceability, key, scale, mbid }
+const CACHE_FILE = path.join(__dirname, 'metadata_cache.json');
+
+function saveMetadataCache() {
+  try {
+    const data = {
+      lastFm: Object.fromEntries(lastFmCache),
+      acousticBrainz: Object.fromEntries(acousticBrainzCache),
+      viewCounts: Object.fromEntries(viewCountCache)
+    };
+    fs.writeFileSync(CACHE_FILE, JSON.stringify(data, null, 2));
+  } catch (err) {
+    console.error('Failed to save metadata cache:', err.message);
+  }
+}
+
+function loadMetadataCache() {
+  if (!fs.existsSync(CACHE_FILE)) return;
+  try {
+    const data = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
+    if (data.lastFm) {
+      for (const [id, val] of Object.entries(data.lastFm)) lastFmCache.set(id, val);
+    }
+    if (data.acousticBrainz) {
+      for (const [id, val] of Object.entries(data.acousticBrainz)) acousticBrainzCache.set(id, val);
+    }
+    if (data.viewCounts) {
+      for (const [id, val] of Object.entries(data.viewCounts)) viewCountCache.set(id, val);
+    }
+    console.log(`✓ Metadata cache loaded: ${lastFmCache.size} Last.fm, ${acousticBrainzCache.size} AcousticBrainz, ${viewCountCache.size} view counts`);
+  } catch (err) {
+    console.warn('Failed to load metadata cache:', err.message);
+  }
+}
 
 // ─── Pool State ───────────────────────────────────────────────────────────────
 let poolMode = 'both'; // 'playlist' | 'discovery' | 'both'
@@ -299,11 +334,12 @@ async function fetchRecommendations(limit = 1) {
     }
     if (!candidates.length) candidates = allCandidates; // fallback if chosen bucket exhausted
 
-    // Derive current energy — prefer Last.fm score (0–1), fall back to source tier (0–1)
+    // Derive current energy — prefer AcousticBrainz mood_party, then Last.fm score (0–1), fall back to source tier (0–1)
     const currentPoolTrack = currentTrack
       ? pool.find(t => t.trackId === currentTrack.trackId)
       : null;
-    const currentEnergy = currentPoolTrack?.lfmEnergy ?? (getEnergyTier(currentPoolTrack) / 3);
+    const currentEnergy = currentPoolTrack?.mood_party ?? currentPoolTrack?.lfmEnergy ?? (getEnergyTier(currentPoolTrack) / 3);
+    const currentBpm    = currentPoolTrack?.bpm || null;
 
     // Score each candidate
     const scores = candidates.map(track => {
@@ -315,15 +351,22 @@ async function fetchRecommendations(limit = 1) {
         score *= (0.4 + 0.6 * pop); // 40% base floor so unpopular tracks still play
       }
 
-      // Energy continuity: use Last.fm 0–1 score when available, else source tier
-      const trackEnergy = track.lfmEnergy ?? (getEnergyTier(track) / 3);
+      // Energy continuity: prefer AcousticBrainz, then Last.fm 0–1 score, else source tier
+      const trackEnergy = track.mood_party ?? track.lfmEnergy ?? (getEnergyTier(track) / 3);
       const energyDiff  = Math.abs(trackEnergy - currentEnergy);
       if      (energyDiff > 0.5)  score *= 0.2; // big jump (e.g. banger → ambient)
       else if (energyDiff > 0.25) score *= 0.6; // medium jump
 
-      // Danceability bonus: bar context — danceable tracks slightly preferred
-      if (track.lfmDance != null) {
-        score *= (0.7 + 0.3 * track.lfmDance); // 70% base + up to 30% bonus
+      // BPM continuity (AcousticBrainz only): avoid jarring tempo changes
+      if (currentBpm && track.bpm) {
+        const bpmDiff = Math.abs(track.bpm - currentBpm);
+        if (bpmDiff > 40) score *= 0.5; // penalize large BPM jumps
+      }
+
+      // Danceability bonus: prefer AcousticBrainz, then Last.fm
+      const dance = track.danceability ?? track.lfmDance;
+      if (dance != null) {
+        score *= (0.7 + 0.3 * dance); // 70% base + up to 30% bonus
       }
 
       // Artist spread: same artist as last track = hard exclude, recent = soft penalty
@@ -634,7 +677,9 @@ async function ensureCacheBuilt() {
     if (artistSeeds.length > 0) await buildCacheFromArtists();
     mergePool();
     enrichPoolWithViewCounts().catch(() => {});
-    enrichPoolWithLastFm().catch(() => {});
+    enrichPoolWithAcousticBrainz()
+      .then(() => enrichPoolWithLastFm())
+      .catch(() => enrichPoolWithLastFm());
   }
 }
 
@@ -644,7 +689,9 @@ async function rebuildPool() {
   if (artistSeeds.length > 0) await buildCacheFromArtists();
   mergePool();
   enrichPoolWithViewCounts().catch(() => {});
-  enrichPoolWithLastFm().catch(() => {});
+  enrichPoolWithAcousticBrainz()
+    .then(() => enrichPoolWithLastFm())
+    .catch(() => enrichPoolWithLastFm());
 }
 
 // Fetch YouTube view counts for pool tracks and store on the track objects.
@@ -680,7 +727,8 @@ async function enrichPoolWithViewCounts() {
       console.warn(`View count batch ${Math.floor(i / 50) + 1} failed:`, err.message);
     }
   }
-  console.log(`✓ View count cache: ${viewCountCache.size} tracks`);
+  saveMetadataCache();
+  console.log(`✓ View count cache enriched: ${viewCountCache.size} tracks total`);
 }
 
 // ─── Last.fm Tag Enrichment ───────────────────────────────────────────────────
@@ -733,6 +781,75 @@ function scoreLastFmTags(tags, tagMap) {
   return totalWeight > 0 ? weightedSum / totalWeight : null;
 }
 
+async function resolveMbid(artist, title) {
+  try {
+    const query = `artist:"${artist}" AND recording:"${cleanTitle(title)}"`;
+    const { data } = await axios.get('https://musicbrainz.org/ws/2/recording/', {
+      params: { query, fmt: 'json', limit: 1 },
+      headers: { 'User-Agent': 'BarJukebox/1.0.0 ( m.lovrekovic@gmail.com )' }
+    });
+    return data?.recordings?.[0]?.id || null;
+  } catch (err) {
+    return null;
+  }
+}
+
+async function fetchAcousticBrainzData(mbid) {
+  try {
+    const { data } = await axios.get(`https://acousticbrainz.org/api/v1/${mbid}/high-level`);
+    const hl = data?.highlevel;
+    if (!hl) return null;
+    
+    return {
+      bpm:          hl.bpm?.all?.bpm,
+      mood_party:   hl.mood_party?.all?.party,
+      danceability: hl.danceability?.all?.danceable,
+      key:          hl.tonal?.key_key,
+      scale:         hl.tonal?.key_scale,
+      mbid:         mbid
+    };
+  } catch (err) {
+    return null;
+  }
+}
+
+async function enrichPoolWithAcousticBrainz() {
+  // Apply cached values immediately
+  for (const t of playlistCache.bar) {
+    if (acousticBrainzCache.has(t.trackId)) {
+      Object.assign(t, acousticBrainzCache.get(t.trackId));
+    }
+  }
+
+  const uncached = playlistCache.bar.filter(t => !acousticBrainzCache.has(t.trackId));
+  if (!uncached.length) return;
+
+  console.log(`🎵 Fetching AcousticBrainz features for ${uncached.length} tracks...`);
+  let fetched = 0, failed = 0;
+
+  for (const track of uncached) {
+    const mbid = await resolveMbid(track.artist, track.title);
+    if (mbid) {
+      const data = await fetchAcousticBrainzData(mbid);
+      if (data) {
+        acousticBrainzCache.set(track.trackId, data);
+        Object.assign(track, data);
+        fetched++;
+      } else {
+        failed++;
+        acousticBrainzCache.set(track.trackId, { mbid: mbid, bpm: null }); // mark as tried
+      }
+    } else {
+      failed++;
+      acousticBrainzCache.set(track.trackId, { mbid: null }); // mark as tried
+    }
+    // Respect MusicBrainz rate limit (1 req/sec)
+    await new Promise(r => setTimeout(r, 1050));
+  }
+  saveMetadataCache();
+  console.log(`✓ AcousticBrainz enrichment: ${fetched} analyzed, ${failed} missed`);
+}
+
 async function enrichPoolWithLastFm() {
   if (!LASTFM_API_KEY) return;
 
@@ -779,7 +896,7 @@ async function enrichPoolWithLastFm() {
     // 200ms between requests → stays well under Last.fm's 5 req/sec limit
     await new Promise(r => setTimeout(r, 200));
   }
-
+  saveMetadataCache();
   console.log(`✓ Last.fm enrichment: ${fetched} tagged, ${failed} missed`);
 }
 
@@ -1449,6 +1566,7 @@ const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 server.listen(PORT, HOST, async () => {
   console.log(`🎵 Jukebox server running → http://${HOST}:${PORT}`);
+  loadMetadataCache();
   await startYTMusicService();
   rebuildPool().catch(err => console.warn('Startup pool build failed:', err.message));
 });
