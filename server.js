@@ -203,39 +203,14 @@ function mergePool() {
       }
     }
 
-    // Split remaining discovery tracks by artist/discovery ratio.
-    // Uses whichever pool is the limiting factor — the ratio is always accurate,
-    // and the pool may be smaller than the sum of both sources (that's intentional).
-    const artistPool    = shuffleArray(poolSources.artist.map(t => ({ ...t, source: 'artist' })).filter(t => !seen.has(t.trackId)));
-    // Moods override charts: if any moods are active, discovery = moods only.
-    // No moods selected = fall back to charts. Genre is always empty now (legacy).
+    // Include ALL artist and discovery tracks — no trimming.
+    // The ratio is enforced at pick time in fetchRecommendations via weighted
+    // bucket selection, so pool size is never sacrificed for ratio accuracy.
     const discoveryTracks = activeMoodIds.size > 0
       ? poolSources.moods.map(t  => ({ ...t, source: 'moods'  }))
       : poolSources.charts.map(t => ({ ...t, source: 'charts' }));
-    const discoveryPool = shuffleArray(discoveryTracks.filter(t => !seen.has(t.trackId)));
 
-    let fromArtist, fromDiscovery;
-    if (artistPool.length === 0 || artistDiscoveryRatio === 0) {
-      fromArtist = []; fromDiscovery = discoveryPool;
-    } else if (discoveryPool.length === 0 || artistDiscoveryRatio === 100) {
-      fromArtist = artistPool; fromDiscovery = [];
-    } else {
-      const aRatio = artistDiscoveryRatio / 100;
-      const dRatio = 1 - aRatio;
-      // How many discovery tracks are needed to pair with all artist tracks at this ratio?
-      const dForAllA = Math.round(artistPool.length * dRatio / aRatio);
-      if (dForAllA <= discoveryPool.length) {
-        // Artist pool is smaller — use all of it, trim discovery to match ratio
-        fromArtist = artistPool;
-        fromDiscovery = discoveryPool.slice(0, dForAllA);
-      } else {
-        // Discovery pool is smaller — use all of it, trim artist to match ratio
-        fromArtist = artistPool.slice(0, Math.round(discoveryPool.length * aRatio / dRatio));
-        fromDiscovery = discoveryPool;
-      }
-    }
-
-    for (const track of [...fromArtist, ...fromDiscovery]) {
+    for (const track of [...poolSources.artist.map(t => ({ ...t, source: 'artist' })), ...discoveryTracks]) {
       if (!seen.has(track.trackId)) {
         seen.add(track.trackId);
         merged.push({ ...track });
@@ -303,8 +278,26 @@ async function fetchRecommendations(limit = 1) {
     const pool = playlistCache.bar;
     if (!pool.length) return null;
 
-    const candidates = pool.filter(t => !excludeIds.has(t.trackId));
-    if (!candidates.length) return null;
+    const allCandidates = pool.filter(t => !excludeIds.has(t.trackId));
+    if (!allCandidates.length) return null;
+
+    // Enforce artist/discovery ratio via weighted bucket selection.
+    // Split into artist vs discovery buckets, pick bucket probabilistically —
+    // ratio is respected without ever shrinking the pool.
+    const artistCandidates    = allCandidates.filter(t => t.source === 'artist');
+    const discoveryCandidates = allCandidates.filter(t => t.source !== 'artist');
+
+    let candidates;
+    if (artistCandidates.length === 0 || artistDiscoveryRatio === 0) {
+      candidates = discoveryCandidates;
+    } else if (discoveryCandidates.length === 0 || artistDiscoveryRatio === 100) {
+      candidates = artistCandidates;
+    } else {
+      candidates = Math.random() < (artistDiscoveryRatio / 100)
+        ? artistCandidates
+        : discoveryCandidates;
+    }
+    if (!candidates.length) candidates = allCandidates; // fallback if chosen bucket exhausted
 
     // Derive current energy — prefer Last.fm score (0–1), fall back to source tier (0–1)
     const currentPoolTrack = currentTrack
