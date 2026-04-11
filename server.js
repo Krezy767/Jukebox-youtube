@@ -30,7 +30,6 @@ let recentArtists  = [];        // last 3 artist names (normalized), for spread 
 const viewCountCache = new Map(); // trackId -> YouTube view count, persists across rebuilds
 const lastFmCache    = new Map(); // trackId -> { energy, danceability }, persists across rebuilds
 const acousticBrainzCache = new Map(); // trackId -> { bpm, mood_party, danceability, key, scale, mbid }
-const spotifyCache = new Map(); // trackId -> { energy, danceability, bpm, key, mode, valence, spotifyId }
 const CACHE_FILE = path.join(__dirname, 'metadata_cache.json');
 
 function saveMetadataCache() {
@@ -38,7 +37,6 @@ function saveMetadataCache() {
     const data = {
       lastFm: Object.fromEntries(lastFmCache),
       acousticBrainz: Object.fromEntries(acousticBrainzCache),
-      spotify: Object.fromEntries(spotifyCache),
       viewCounts: Object.fromEntries(viewCountCache)
     };
     fs.writeFileSync(CACHE_FILE, JSON.stringify(data, null, 2));
@@ -57,13 +55,10 @@ function loadMetadataCache() {
     if (data.acousticBrainz) {
       for (const [id, val] of Object.entries(data.acousticBrainz)) acousticBrainzCache.set(id, val);
     }
-    if (data.spotify) {
-      for (const [id, val] of Object.entries(data.spotify)) spotifyCache.set(id, val);
-    }
     if (data.viewCounts) {
       for (const [id, val] of Object.entries(data.viewCounts)) viewCountCache.set(id, val);
     }
-    console.log(`✓ Metadata cache loaded: ${lastFmCache.size} Last.fm, ${acousticBrainzCache.size} AcousticBrainz, ${spotifyCache.size} Spotify, ${viewCountCache.size} view counts`);
+    console.log(`✓ Metadata cache loaded: ${lastFmCache.size} Last.fm, ${acousticBrainzCache.size} AcousticBrainz, ${viewCountCache.size} view counts`);
   } catch (err) {
     console.warn('Failed to load metadata cache:', err.message);
   }
@@ -111,8 +106,6 @@ const AVAILABLE_MOODS = [
 // ─── Config ───────────────────────────────────────────────────────────────────
 const YOUTUBE_API_KEY    = process.env.YOUTUBE_API_KEY || 'YOUR_YOUTUBE_API_KEY_HERE';
 const LASTFM_API_KEY     = process.env.LASTFM_API_KEY  || '';
-const SPOTIFY_CLIENT_ID     = process.env.SPOTIFY_CLIENT_ID || '';
-const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET || '';
 const MAX_TRACK_DURATION_MS = 10 * 60 * 1000; // 10 minutes — filters out compilations/streams
 const MIN_TRACK_DURATION_MS = 90 * 1000;      // 90 seconds — filters out Shorts
 const BLOCK_EXPLICIT  = process.env.BLOCK_EXPLICIT === 'true';
@@ -341,14 +334,13 @@ async function fetchRecommendations(limit = 1) {
     }
     if (!candidates.length) candidates = allCandidates; // fallback if chosen bucket exhausted
 
-    // Derive current state — prefer Spotify, then AcousticBrainz, then Last.fm
+    // Derive current state — prefer AcousticBrainz mood_party, then Last.fm score (0–1), fall back to source tier (0–1)
     const currentPoolTrack = currentTrack
       ? pool.find(t => t.trackId === currentTrack.trackId)
       : null;
     
-    const currentEnergy = currentPoolTrack?.energy ?? currentPoolTrack?.mood_party ?? currentPoolTrack?.lfmEnergy ?? (getEnergyTier(currentPoolTrack) / 3);
+    const currentEnergy = currentPoolTrack?.mood_party ?? currentPoolTrack?.lfmEnergy ?? (getEnergyTier(currentPoolTrack) / 3);
     const currentBpm    = currentPoolTrack?.bpm || null;
-    const currentValence = currentPoolTrack?.valence || 0.5;
 
     // Score each candidate
     const scores = candidates.map(track => {
@@ -360,8 +352,8 @@ async function fetchRecommendations(limit = 1) {
         score *= (0.4 + 0.6 * pop);
       }
 
-      // Energy continuity: Spotify 'energy' or AB 'mood_party' or LFM energy
-      const trackEnergy = track.energy ?? track.mood_party ?? track.lfmEnergy ?? (getEnergyTier(track) / 3);
+      // Energy continuity: prefer AcousticBrainz, then Last.fm 0–1 score, else source tier
+      const trackEnergy = track.mood_party ?? track.lfmEnergy ?? (getEnergyTier(track) / 3);
       const energyDiff  = Math.abs(trackEnergy - currentEnergy);
       if      (energyDiff > 0.5)  score *= 0.2;
       else if (energyDiff > 0.25) score *= 0.6;
@@ -372,13 +364,7 @@ async function fetchRecommendations(limit = 1) {
         if (bpmDiff > 40) score *= 0.5;
       }
 
-      // Mood (Valence) continuity: try to match the "happiness" level
-      if (track.valence != null) {
-        const valenceDiff = Math.abs(track.valence - currentValence);
-        if (valenceDiff > 0.4) score *= 0.7; // slight penalty for total mood swings
-      }
-
-      // Danceability bonus
+      // Danceability bonus: prefer AcousticBrainz, then Last.fm
       const dance = track.danceability ?? track.lfmDance;
       if (dance != null) {
         score *= (0.7 + 0.3 * dance);
@@ -692,8 +678,7 @@ async function ensureCacheBuilt() {
     if (artistSeeds.length > 0) await buildCacheFromArtists();
     mergePool();
     enrichPoolWithViewCounts().catch(() => {});
-    enrichPoolWithSpotify()
-      .then(() => enrichPoolWithAcousticBrainz())
+    enrichPoolWithAcousticBrainz()
       .then(() => enrichPoolWithLastFm())
       .catch(() => enrichPoolWithLastFm());
   }
@@ -705,8 +690,7 @@ async function rebuildPool() {
   if (artistSeeds.length > 0) await buildCacheFromArtists();
   mergePool();
   enrichPoolWithViewCounts().catch(() => {});
-  enrichPoolWithSpotify()
-    .then(() => enrichPoolWithAcousticBrainz())
+  enrichPoolWithAcousticBrainz()
     .then(() => enrichPoolWithLastFm())
     .catch(() => enrichPoolWithLastFm());
 }
@@ -796,91 +780,6 @@ function scoreLastFmTags(tags, tagMap) {
     }
   }
   return totalWeight > 0 ? weightedSum / totalWeight : null;
-}
-
-let spotifyAccessToken = null;
-let spotifyTokenExpires = 0;
-
-async function getSpotifyAccessToken() {
-  if (spotifyAccessToken && Date.now() < spotifyTokenExpires) return spotifyAccessToken;
-  if (!SPOTIFY_CLIENT_ID || !SPOTIFY_CLIENT_SECRET) return null;
-
-  try {
-    const auth = Buffer.from(`${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`).toString('base64');
-    const { data } = await axios.post('https://accounts.spotify.com/api/token', 'grant_type=client_credentials', {
-      headers: {
-        'Authorization': `Basic ${auth}`,
-        'Content-Type': 'application/x-www-form-urlencoded'
-      }
-    });
-    spotifyAccessToken = data.access_token;
-    spotifyTokenExpires = Date.now() + (data.expires_in * 1000) - 60000;
-    return spotifyAccessToken;
-  } catch (err) {
-    console.error('Spotify Auth failed:', err.response?.data || err.message);
-    return null;
-  }
-}
-
-async function enrichPoolWithSpotify() {
-  const token = await getSpotifyAccessToken();
-  if (!token) return;
-
-  // Apply cached values immediately
-  for (const t of playlistCache.bar) {
-    if (spotifyCache.has(t.trackId)) {
-      Object.assign(t, spotifyCache.get(t.trackId));
-    }
-  }
-
-  const uncached = playlistCache.bar.filter(t => !spotifyCache.has(t.trackId));
-  if (!uncached.length) return;
-
-  console.log(`🎵 Fetching Spotify Audio Features for ${uncached.length} tracks...`);
-  let fetched = 0;
-
-  for (const track of uncached) {
-    try {
-      // 1. Search for track
-      const { data: searchData } = await axios.get('https://api.spotify.com/v1/search', {
-        params: { q: `${track.artist} ${cleanTitle(track.title)}`, type: 'track', limit: 1 },
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      const spTrack = searchData.tracks?.items?.[0];
-      if (!spTrack) {
-        spotifyCache.set(track.trackId, { spotifyId: null });
-        continue;
-      }
-
-      // 2. Get Audio Features
-      const { data: features } = await axios.get(`https://api.spotify.com/v1/audio-features/${spTrack.id}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (features) {
-        const result = {
-          spotifyId:    spTrack.id,
-          energy:       features.energy,
-          danceability: features.danceability,
-          bpm:          features.tempo,
-          key:          features.key,
-          mode:         features.mode,
-          valence:      features.valence
-        };
-        spotifyCache.set(track.trackId, result);
-        Object.assign(track, result);
-        fetched++;
-      }
-    } catch (err) {
-      // Skip on error
-    }
-    // Small delay to be polite
-    await new Promise(r => setTimeout(r, 100));
-  }
-  
-  if (fetched > 0) saveMetadataCache();
-  console.log(`✓ Spotify enrichment: ${fetched} tracks analyzed`);
 }
 
 async function resolveMbid(artist, title) {
