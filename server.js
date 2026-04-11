@@ -4,8 +4,8 @@ const http = require('http');
 const { Server } = require('socket.io');
 const axios = require('axios');
 const { v4: uuidv4 } = require('uuid');
-const querystring = require('querystring');
 const path = require('path');
+const { spawn } = require('child_process');
 
 const app = express();
 const server = http.createServer(app);
@@ -19,45 +19,153 @@ app.get('/healthz', (req, res) => {
 });
 
 // ─── State (in-memory, resets on server restart) ─────────────────────────────
-let spotifyTokens = { accessToken: null, refreshToken: null, expiresAt: 0 };
-let queue = [];        // sorted by votes descending
+let queue = [];
 let currentTrack = null;
 let targetTrack = null;
-let deviceId = null;   // Spotify Web Playback SDK device ID from host page
-let lastTrackChange = 0; // Timestamp of last track change (debounce protection)
+let lastTrackChange = 0;
 let activeHost = { socketId: null, hostId: null };
 let recentlyPlayed = new Map(); // trackId -> timestamp of when it was played
-
-const SEED_GENRES = ['pop', 'rock', 'electronic', 'hip-hop', 'jazz', 'ambient'];
+let recentArtists  = [];        // last 3 artist names (normalized), for spread enforcement
+const viewCountCache = new Map(); // trackId -> YouTube view count, persists across rebuilds
+const lastFmCache    = new Map(); // trackId -> { energy, danceability }, persists across rebuilds
 
 // ─── Pool State ───────────────────────────────────────────────────────────────
 let poolMode = 'both'; // 'playlist' | 'discovery' | 'both'
-let poolSettings = {
-  minPopularity: parseInt(process.env.MIN_POPULARITY) || 0,
-};
-let artistSeeds = []; // [{ artistId, artistName }]
+let artistDiscoveryRatio = 50; // 0 = all discovery (charts/genre), 100 = all artist seeds
+let artistSeeds = []; // [{ channelId, artistName }]
 let csvPlaylists = []; // [{ name, addedAt, tracks: [...] }]
+let activeMoodIds = new Set(); // mood IDs currently active
 let poolSources = {
-  csv:    [],  // merged tracks from all uploaded CSV playlists
-  genre:  [],  // tracks from genre keyword search (with popularity)
-  artist: [],  // tracks from artist search (with popularity)
-  pinned: [],  // manually pinned tracks (bypass popularity filter)
+  csv:    [],
+  genre:  [],
+  charts: [],
+  moods:  [],
+  artist: [],
+  pinned: [],
 };
 
-
-// Static fallback shown when playlist cache is unavailable (API limits etc.)
-const STATIC_FALLBACK_TRACKS = [
-  { trackId: '0VjIjW4GlUZAMYd2vXMi3b', title: 'Blinding Lights', artist: 'The Weeknd', album: 'After Hours', albumArt: null, explicit: false },
-  { trackId: '7qiZfU4dY1lWllzX7mPBI3', title: 'Shape of You', artist: 'Ed Sheeran', album: '÷ (Divide)', albumArt: null, explicit: false },
-  { trackId: '4LRPiXqCikLlN15c3yImP7', title: 'As It Was', artist: 'Harry Styles', album: "Harry's House", albumArt: null, explicit: false },
-  { trackId: '02MWAaffLxlfxAUY7c5dvx', title: 'Heat Waves', artist: 'Glass Animals', album: 'Dreamland', albumArt: null, explicit: false },
-  { trackId: '39LLxExYz6ewLAcYrzQQyP', title: 'Levitating', artist: 'Dua Lipa', album: 'Future Nostalgia', albumArt: null, explicit: false },
-  { trackId: '2Fxmhks0live0oHCCKLjJj', title: 'bad guy', artist: 'Billie Eilish', album: 'WHEN WE ALL FALL ASLEEP, WHERE DO WE GO?', albumArt: null, explicit: false },
-  { trackId: '5HCyWlXZPP0y6Gqq8TgA20', title: 'Stay', artist: 'The Kid LAROI & Justin Bieber', album: 'F*CK LOVE 3: OVER YOU', albumArt: null, explicit: false },
-  { trackId: '6UelLqGlWMcVH1E5c4H7lY', title: 'Watermelon Sugar', artist: 'Harry Styles', album: 'Fine Line', albumArt: null, explicit: false },
-  { trackId: '3PfIrDoz19wz7qK7tYeu62', title: "Don't Start Now", artist: 'Dua Lipa', album: 'Future Nostalgia', albumArt: null, explicit: false },
+// ─── Available Moods ──────────────────────────────────────────────────────────
+const AVAILABLE_MOODS = [
+  { id: 'party',     name: 'Party',      emoji: '🎉', query: 'Party Hits' },
+  { id: 'chill',     name: 'Chill',      emoji: '😌', query: 'Chill Hits' },
+  { id: 'feelgood',  name: 'Feel Good',  emoji: '😊', query: 'Feel Good Music' },
+  { id: 'workout',   name: 'Workout',    emoji: '💪', query: 'Workout Music' },
+  { id: 'hiphop',    name: 'Hip-Hop',    emoji: '🎤', query: 'Hip Hop Hits' },
+  { id: 'rnb',       name: 'R&B',        emoji: '❤️', query: 'R&B Hits' },
+  { id: 'pop',       name: 'Pop',        emoji: '⭐', query: 'Pop Hits' },
+  { id: 'rock',      name: 'Rock',       emoji: '🎸', query: 'Rock Hits' },
+  { id: 'dance',     name: 'Dance',      emoji: '🕺', query: 'Dance Hits' },
+  { id: 'throwback', name: 'Throwback',  emoji: '⏮️', query: 'Throwback Hits' },
+  { id: 'summer',    name: 'Summer',     emoji: '☀️', query: 'Summer Hits' },
+  { id: 'romance',   name: 'Romance',    emoji: '💕', query: 'Romance Music' },
+  { id: 'latin',     name: 'Latin',      emoji: '🌶️', query: 'Reggaeton Hits' },
+  { id: 'focus',     name: 'Focus',      emoji: '🎯', query: 'Focus Music' },
+  { id: 'jazz',      name: 'Jazz',       emoji: '🎷', query: 'Jazz Hits' },
+  { id: 'house',      name: 'Deep House',    emoji: '🎛️', query: 'Deep House Music' },
+  { id: 'organichouse', name: 'Organic House', emoji: '🌅', query: 'Organic Deep House Melodic' },
+  { id: 'afrohouse',   name: 'Afro House',    emoji: '🥁', query: 'Afro House Music' },
+  { id: 'jackinhouse',  name: 'Jackin\' House',   emoji: '📼', query: 'Jackin House Lo-Fi' },
+  { id: 'croatiantrash', name: 'Croatian Trash', emoji: '🇭🇷', query: 'Hrvatska eurodance 90s' },
 ];
 
+// ─── Config ───────────────────────────────────────────────────────────────────
+const YOUTUBE_API_KEY    = process.env.YOUTUBE_API_KEY || 'YOUR_YOUTUBE_API_KEY_HERE';
+const LASTFM_API_KEY     = process.env.LASTFM_API_KEY  || '';
+const MAX_TRACK_DURATION_MS = 10 * 60 * 1000; // 10 minutes — filters out compilations/streams
+const MIN_TRACK_DURATION_MS = 90 * 1000;      // 90 seconds — filters out Shorts
+const BLOCK_EXPLICIT  = process.env.BLOCK_EXPLICIT === 'true';
+const ADMIN_PASSWORD  = process.env.ADMIN_PASSWORD || 'changeme';
+
+const YT_API = 'https://www.googleapis.com/youtube/v3';
+
+// ─── YouTube Helpers ──────────────────────────────────────────────────────────
+function parseISO8601Duration(duration) {
+  if (!duration) return 0;
+  const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  if (!match) return 0;
+  const h = parseInt(match[1] || 0);
+  const m = parseInt(match[2] || 0);
+  const s = parseInt(match[3] || 0);
+  return (h * 3600 + m * 60 + s) * 1000;
+}
+
+async function ytSearch(query, maxResults = 15) {
+  const { data } = await axios.get(`${YT_API}/search`, {
+    params: {
+      part: 'snippet',
+      type: 'video',
+      videoCategoryId: '10', // Music category
+      videoEmbeddable: 'true',
+      regionCode: 'US',
+      relevanceLanguage: 'en',
+      q: query,
+      maxResults,
+      key: YOUTUBE_API_KEY,
+    },
+  });
+  return data.items || [];
+}
+
+async function ytVideoDetails(videoIds) {
+  if (!videoIds.length) return [];
+  const { data } = await axios.get(`${YT_API}/videos`, {
+    params: {
+      part: 'snippet,contentDetails,status',
+      id: videoIds.join(','),
+      key: YOUTUBE_API_KEY,
+    },
+  });
+  // Filter out videos that can't be embedded — they'll always error 101/150 in IFrame player
+  return (data.items || []).filter(item => item.status?.embeddable !== false);
+}
+
+function isValidSongDuration(durationMs) {
+  return durationMs >= MIN_TRACK_DURATION_MS && durationMs <= MAX_TRACK_DURATION_MS;
+}
+
+// Score a raw API item by how "audio-only / YouTube Music-like" it is.
+// Topic channels  (e.g. "The Weeknd - Topic") are the exact source YouTube Music uses.
+// Returns: 2 = Topic channel audio, 1 = official audio/lyric, 0 = neutral, -1 = music video
+function scoreYtItem(item) {
+  const title   = (item.snippet?.title   || '').toLowerCase();
+  const channel = (item.snippet?.channelTitle || '');
+  if (channel.endsWith('- Topic'))                                          return 2;
+  if (title.includes('official audio') || title.includes('(audio)') ||
+      title.includes('lyric') || title.includes('lyrics'))                  return 1;
+  if (title.includes('official video') || title.includes('official music video') ||
+      title.includes('(mv)') || title.includes('music video'))              return -1;
+  return 0;
+}
+
+// Clean up Topic-channel titles: "Song Name" stays, "Artist - Song" stays.
+// Topic channels already upload clean titles, so we just strip trailing " (Official Audio)" etc.
+function cleanTitle(raw) {
+  return raw
+    .replace(/\s*[\[(]official\s*(music\s*)?(video|audio|lyric(s)?|visualizer)[\])]/gi, '')
+    .replace(/\s*[\[(](lyrics?|audio|video|mv|visualizer)[\])]/gi, '')
+    .trim();
+}
+
+function mapVideoItemToTrack(item) {
+  const snippet  = item.snippet || {};
+  const duration = parseISO8601Duration(item.contentDetails?.duration);
+  const channel  = snippet.channelTitle || 'Unknown';
+  // For Topic channels strip the trailing " - Topic" to get the real artist name
+  const artist   = channel.endsWith('- Topic') ? channel.slice(0, -8).trim() : channel;
+  return {
+    trackId:  item.id,
+    title:    cleanTitle(snippet.title || 'Unknown'),
+    artist,
+    album:    '',
+    albumArt: snippet.thumbnails?.maxres?.url || snippet.thumbnails?.medium?.url || snippet.thumbnails?.default?.url || null,
+    explicit: false,
+    duration,
+    popularity: null,
+    isTopicAudio: channel.endsWith('- Topic'),
+  };
+}
+
+// ─── Pool Helpers ─────────────────────────────────────────────────────────────
 function rebuildCsvSource() {
   const seen = new Set();
   poolSources.csv = [];
@@ -76,12 +184,10 @@ function mergePool() {
   const merged = [];
   const includeCsv       = poolMode === 'playlist' || poolMode === 'both';
   const includeDiscovery = poolMode === 'discovery' || poolMode === 'both';
-  const passFloor = t => t.popularity === null || t.popularity === undefined || t.popularity >= poolSettings.minPopularity;
 
   if (includeCsv) {
-    // CSV tracks: popularity floor applies (CSV has real scores from Exportify)
     for (const track of poolSources.csv) {
-      if (!seen.has(track.trackId) && passFloor(track)) {
+      if (!seen.has(track.trackId)) {
         seen.add(track.trackId);
         merged.push({ ...track, source: 'csv' });
       }
@@ -89,27 +195,72 @@ function mergePool() {
   }
 
   if (includeDiscovery) {
-    // Pinned always included regardless of popularity
+    // Pinned tracks always included regardless of ratio
     for (const track of poolSources.pinned) {
       if (!seen.has(track.trackId)) {
         seen.add(track.trackId);
         merged.push({ ...track, source: 'pinned' });
       }
     }
-    // Artist and genre filtered by popularity floor
-    for (const source of ['artist', 'genre']) {
-      for (const track of poolSources[source]) {
-        if (!seen.has(track.trackId) && passFloor(track)) {
-          seen.add(track.trackId);
-          merged.push({ ...track, source });
-        }
+
+    // Split remaining discovery tracks by artist/discovery ratio.
+    // Uses whichever pool is the limiting factor — the ratio is always accurate,
+    // and the pool may be smaller than the sum of both sources (that's intentional).
+    const artistPool    = shuffleArray(poolSources.artist.map(t => ({ ...t, source: 'artist' })).filter(t => !seen.has(t.trackId)));
+    // Moods override charts: if any moods are active, discovery = moods only.
+    // No moods selected = fall back to charts. Genre is always empty now (legacy).
+    const discoveryTracks = activeMoodIds.size > 0
+      ? poolSources.moods.map(t  => ({ ...t, source: 'moods'  }))
+      : poolSources.charts.map(t => ({ ...t, source: 'charts' }));
+    const discoveryPool = shuffleArray(discoveryTracks.filter(t => !seen.has(t.trackId)));
+
+    let fromArtist, fromDiscovery;
+    if (artistPool.length === 0 || artistDiscoveryRatio === 0) {
+      fromArtist = []; fromDiscovery = discoveryPool;
+    } else if (discoveryPool.length === 0 || artistDiscoveryRatio === 100) {
+      fromArtist = artistPool; fromDiscovery = [];
+    } else {
+      const aRatio = artistDiscoveryRatio / 100;
+      const dRatio = 1 - aRatio;
+      // How many discovery tracks are needed to pair with all artist tracks at this ratio?
+      const dForAllA = Math.round(artistPool.length * dRatio / aRatio);
+      if (dForAllA <= discoveryPool.length) {
+        // Artist pool is smaller — use all of it, trim discovery to match ratio
+        fromArtist = artistPool;
+        fromDiscovery = discoveryPool.slice(0, dForAllA);
+      } else {
+        // Discovery pool is smaller — use all of it, trim artist to match ratio
+        fromArtist = artistPool.slice(0, Math.round(discoveryPool.length * aRatio / dRatio));
+        fromDiscovery = discoveryPool;
+      }
+    }
+
+    for (const track of [...fromArtist, ...fromDiscovery]) {
+      if (!seen.has(track.trackId)) {
+        seen.add(track.trackId);
+        merged.push({ ...track });
       }
     }
   }
 
   playlistCache.bar = shuffleArray(merged);
   suggestionRotationIndex = 0;
-  console.log(`✓ Pool merged: ${merged.length} tracks [mode: ${poolMode}] (csv: ${poolSources.csv.filter(passFloor).length}, genre: ${poolSources.genre.filter(passFloor).length}, artist: ${poolSources.artist.filter(passFloor).length}, pinned: ${poolSources.pinned.length})`);
+  console.log(`✓ Pool merged: ${merged.length} tracks [mode: ${poolMode}] (csv: ${poolSources.csv.length}, charts: ${poolSources.charts.length}, genre: ${poolSources.genre.length}, artist: ${poolSources.artist.length}, pinned: ${poolSources.pinned.length})`);
+  // Kick off async queue pruning — don't await, mergePool is sync
+  pruneQueueToPool().catch(() => {});
+}
+
+// Remove auto-queued fallback tracks that no longer belong in the current pool.
+// Patron-requested tracks (votes >= 1, non-fallback id) are never touched.
+async function pruneQueueToPool() {
+  const poolSet = new Set(playlistCache.bar.map(t => t.trackId));
+  const before = queue.length;
+  queue = queue.filter(item => !item.id.startsWith('fallback_') || poolSet.has(item.trackId));
+  if (queue.length < before) {
+    console.log(`✓ Pruned ${before - queue.length} stale fallback track(s) from queue after pool rebuild`);
+    await ensureQueueHasUpcomingTrack();
+    broadcast();
+  }
 }
 
 function shuffleArray(arr) {
@@ -121,199 +272,362 @@ function shuffleArray(arr) {
   return out;
 }
 
-// Fetch recommendations from cached playlists
-async function fetchSpotifyRecommendations(limit = 1) {
+// ─── Smart Recommendation Scoring ────────────────────────────────────────────
+// Energy tier derived from mood/source — no external API needed.
+// Used to avoid jarring energy jumps between autoplay tracks.
+const SOURCE_ENERGY = {
+  workout: 3, party: 3, dance: 3, hiphop: 3, afrohouse: 3, jackinhouse: 3,
+  pop: 2, rock: 2, latin: 2, rnb: 2, house: 2, organichouse: 2,
+  throwback: 1, summer: 1, feelgood: 1,
+  chill: 0, focus: 0, jazz: 0, romance: 0,
+  // Non-mood sources get a neutral mid-tier
+  charts: 2, artist: 2, csv: 2, pinned: 2, genre: 2, moods: 2,
+};
+
+function getEnergyTier(track) {
+  return SOURCE_ENERGY[track?.source] ?? 2;
+}
+
+async function fetchRecommendations(limit = 1) {
   try {
     const now = Date.now();
     const thirtyMinutesAgo = now - (30 * 60 * 1000);
-
-    // Clean up old entries
     for (const [trackId, timestamp] of recentlyPlayed) {
-      if (timestamp < thirtyMinutesAgo) {
-        recentlyPlayed.delete(trackId);
-      }
+      if (timestamp < thirtyMinutesAgo) recentlyPlayed.delete(trackId);
     }
-
     const excludeIds = new Set(
       [...queue.map(t => t.trackId), currentTrack?.trackId, targetTrack?.trackId].filter(Boolean)
     );
+    for (const trackId of recentlyPlayed.keys()) excludeIds.add(trackId);
 
-    // Also exclude recently played (within 30 minutes)
-    for (const trackId of recentlyPlayed.keys()) {
-      excludeIds.add(trackId);
+    const pool = playlistCache.bar;
+    if (!pool.length) return null;
+
+    const candidates = pool.filter(t => !excludeIds.has(t.trackId));
+    if (!candidates.length) return null;
+
+    // Derive current energy — prefer Last.fm score (0–1), fall back to source tier (0–1)
+    const currentPoolTrack = currentTrack
+      ? pool.find(t => t.trackId === currentTrack.trackId)
+      : null;
+    const currentEnergy = currentPoolTrack?.lfmEnergy ?? (getEnergyTier(currentPoolTrack) / 3);
+
+    // Score each candidate
+    const scores = candidates.map(track => {
+      let score = 1.0;
+
+      // Popularity: log scale so 100M views isn't absurdly dominant over 1M
+      if (track.viewCount != null && track.viewCount > 0) {
+        const pop = Math.min(1, Math.log10(track.viewCount + 1) / 8);
+        score *= (0.4 + 0.6 * pop); // 40% base floor so unpopular tracks still play
+      }
+
+      // Energy continuity: use Last.fm 0–1 score when available, else source tier
+      const trackEnergy = track.lfmEnergy ?? (getEnergyTier(track) / 3);
+      const energyDiff  = Math.abs(trackEnergy - currentEnergy);
+      if      (energyDiff > 0.5)  score *= 0.2; // big jump (e.g. banger → ambient)
+      else if (energyDiff > 0.25) score *= 0.6; // medium jump
+
+      // Danceability bonus: bar context — danceable tracks slightly preferred
+      if (track.lfmDance != null) {
+        score *= (0.7 + 0.3 * track.lfmDance); // 70% base + up to 30% bonus
+      }
+
+      // Artist spread: same artist as last track = hard exclude, recent = soft penalty
+      const artist = track.artist.toLowerCase().trim();
+      if (recentArtists[0] === artist)                  score = 0;
+      else if (recentArtists.slice(1).includes(artist)) score *= 0.15;
+
+      return Math.max(0, score);
+    });
+
+    // Weighted random selection — avoids always picking the single top-scored track
+    const results = [];
+    const used    = new Set();
+
+    for (let pick = 0; pick < limit; pick++) {
+      const total = scores.reduce((sum, s, i) => used.has(i) ? sum : sum + s, 0);
+      if (total === 0) {
+        // All candidates scored 0 (e.g. tiny pool, all same artist) — pure random fallback
+        const remaining = candidates.filter((_, i) => !used.has(i));
+        if (remaining.length) results.push(remaining[Math.floor(Math.random() * remaining.length)]);
+        break;
+      }
+      let r = Math.random() * total;
+      for (let i = 0; i < candidates.length; i++) {
+        if (used.has(i)) continue;
+        r -= scores[i];
+        if (r <= 0) { results.push(candidates[i]); used.add(i); break; }
+      }
     }
 
-    // Pick from bar playlist, fall back to static list if cache empty
-    const pool = playlistCache.bar.length > 0 ? playlistCache.bar : STATIC_FALLBACK_TRACKS;
-    const candidates = pool
-      .filter(t => !excludeIds.has(t.trackId) && !(BLOCK_EXPLICIT && t.explicit))
-      .sort(() => Math.random() - 0.5)
-      .slice(0, limit);
-
-    return candidates.length > 0 ? candidates : null;
+    return results.length > 0 ? results : null;
   } catch (err) {
     console.error('Failed to fetch recommendations:', err.message);
     return null;
   }
 }
 
-// ─── Config ───────────────────────────────────────────────────────────────────
-const CLIENT_ID     = process.env.SPOTIFY_CLIENT_ID;
-const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
-const REDIRECT_URI  = process.env.REDIRECT_URI || 'http://127.0.0.1:3000/auth/callback';
-const BLOCK_EXPLICIT = process.env.BLOCK_EXPLICIT === 'true';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'changeme';
-const SCOPES = [
-  'streaming',
-  'user-read-email',
-  'user-read-private',
-  'user-modify-playback-state',
-  'user-read-playback-state',
-  'user-library-read',
-  'playlist-read-private',
-  'playlist-read-collaborative',
-].join(' ');
-
-// ─── Spotify Token Helpers ────────────────────────────────────────────────────
-const authHeader = () => ({
-  Authorization: 'Basic ' + Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64'),
-  'Content-Type': 'application/x-www-form-urlencoded',
-});
-
-async function refreshAccessToken() {
-  if (!spotifyTokens.refreshToken) return null;
-  const { data } = await axios.post(
-    'https://accounts.spotify.com/api/token',
-    querystring.stringify({ grant_type: 'refresh_token', refresh_token: spotifyTokens.refreshToken }),
-    { headers: authHeader() }
-  );
-  spotifyTokens.accessToken = data.access_token;
-  spotifyTokens.expiresAt   = Date.now() + data.expires_in * 1000;
-  return spotifyTokens.accessToken;
-}
-
-async function getToken() {
-  if (!spotifyTokens.accessToken) return null;
-  if (Date.now() > spotifyTokens.expiresAt - 60_000) return refreshAccessToken();
-  return spotifyTokens.accessToken;
-}
-
-// Client credentials for search (no user auth required)
-let clientCredentialsToken = null;
-let clientCredentialsExpires = 0;
-
-async function getClientCredentialsToken() {
-  if (clientCredentialsToken && Date.now() < clientCredentialsExpires - 60_000) {
-    return clientCredentialsToken;
-  }
-  try {
-    const { data } = await axios.post(
-      'https://accounts.spotify.com/api/token',
-      querystring.stringify({ grant_type: 'client_credentials' }),
-      { headers: authHeader() }
-    );
-    clientCredentialsToken = data.access_token;
-    clientCredentialsExpires = Date.now() + data.expires_in * 1000;
-    return clientCredentialsToken;
-  } catch (err) {
-    console.error('Client credentials error:', err.response?.data);
-    return null;
-  }
-}
-
 // ─── Playlist Cache ───────────────────────────────────────────────────────────
-let playlistCache = {
-  bar: [],
-};
-let suggestionRotationIndex = 0; // Tracks which songs to show next
+let playlistCache = { bar: [] };
+let suggestionRotationIndex = 0;
 
+// ─── YouTube Music Python microservice ────────────────────────────────────────
+const YTMUSIC_SERVICE_PORT = process.env.YTMUSIC_SERVICE_PORT || 5001;
+const YTMUSIC_SERVICE_URL  = `http://127.0.0.1:${YTMUSIC_SERVICE_PORT}`;
+let ytmusicReady    = false;
+let ytmusicProcess  = null;
 
-async function buildCacheFromSearch() {
-  try {
-    const token = await getClientCredentialsToken();
-    if (!token) {
-      console.warn('No token for search cache build — using static fallback only');
-      await enrichStaticFallbackArt();
-      return;
-    }
-    const searchQueries = ['pop', 'rock', 'hip-hop', 'electronic', 'jazz', 'indie', 'r&b', 'dance'];
-    const collected = [];
-    for (const q of searchQueries) {
+async function startYTMusicService() {
+  return new Promise((resolve) => {
+    const pythonCmd  = process.platform === 'win32' ? 'python' : 'python3';
+    const scriptPath = path.join(__dirname, 'ytmusic_service.py');
+
+    ytmusicProcess = spawn(pythonCmd, [scriptPath, String(YTMUSIC_SERVICE_PORT)], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    ytmusicProcess.stdout.on('data', d => process.stdout.write(`[ytmusic] ${d}`));
+    ytmusicProcess.stderr.on('data', d => process.stderr.write(`[ytmusic] ${d}`));
+
+    ytmusicProcess.on('exit', (code) => {
+      console.warn(`[ytmusic] Service exited with code ${code}`);
+      ytmusicReady = false;
+    });
+
+    // Poll for health — give it up to 20 seconds to start
+    let attempts = 0;
+    const poll = setInterval(async () => {
+      attempts++;
       try {
-        // Use genre: filter (same as guest search) — returns mainstream tracks
-        // and is more likely to include popularity data than plain text search
-        const searchUrl = `https://api.spotify.com/v1/search?q=genre:${encodeURIComponent(q)}&type=track&limit=10&market=US`;
-        const { data } = await axios.get(searchUrl, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const tracks = data.tracks?.items || [];
-        for (const t of tracks) {
-          if (!t?.id) continue;
-          if (BLOCK_EXPLICIT && t.explicit) continue;
-          collected.push({
-            trackId: t.id,
-            title: t.name,
-            artist: t.artists.map(a => a.name).join(', '),
-            album: t.album.name,
-            albumArt: t.album.images[1]?.url || t.album.images[0]?.url || null,
-            explicit: t.explicit,
-            popularity: typeof t.popularity === 'number' ? t.popularity : null,
-            uri: t.uri,
-          });
+        await axios.get(`${YTMUSIC_SERVICE_URL}/health`, { timeout: 2000 });
+        clearInterval(poll);
+        ytmusicReady = true;
+        console.log('✓ YouTube Music Python service ready');
+        resolve(true);
+      } catch {
+        if (attempts >= 20) {
+          clearInterval(poll);
+          console.warn('⚠ YouTube Music Python service failed to start after 20s');
+          resolve(false);
         }
+      }
+    }, 1000);
+  });
+}
+
+// Map a song from the Python service to our internal track format.
+// Python service returns: { videoId, title, artist, album, albumArt, duration (seconds), videoType }
+function mapYtmSongToTrack(song) {
+  return {
+    trackId:     song.videoId,
+    title:       song.title    || 'Unknown',
+    artist:      song.artist   || 'Unknown',
+    album:       song.album    || '',
+    albumArt:    song.albumArt || null,
+    explicit:    false,
+    duration:    song.duration ? song.duration * 1000 : 0, // seconds → ms
+    popularity:  null,
+    videoType:   song.videoType || '',
+    isTopicAudio: song.videoType === 'MUSIC_VIDEO_TYPE_ATV',
+  };
+}
+
+// ─── Content filter ──────────────────────────────────────────────────────────
+// Filters out non-English/non-Western songs that slip through GL=US region pinning.
+// ── Pattern filters — each derived from real pool examples ───────────────────
+const NON_LATIN_RE  = /[\u0370-\uFFFF]/;  // non-Latin scripts (Greek+, Cyrillic, Arabic, Hindi, CJK…) — allows accented Latin like é ñ ü
+const FILM_SONG_RE      = /\(from\s+["'"]/i;             // "(From "Movie")" — Indian film music
+const BAD_VERSION_RE    = /\b(karaoke|instrumental|cover version|tribute to|originally (performed|by))\b/i;
+
+// Romanized Arabic words that appear in song titles
+const ARABIC_TITLE_RE = /\b(habibi|habibti|yalla|wallah|inshallah|khalas|albi|mabrook|mashallah|ya\s+habibi|ana\s+mish|wala[hy]|enta|enti|ya\s+leil|ya\s+alb)\b/i;
+
+// Romanized South Asian (Hindi/Urdu/Punjabi/Sinhala) words common in song titles.
+// Words chosen because they are near-exclusively South Asian in a music context.
+const SOUTH_ASIAN_TITLE_RE = /\b(ishq|mohabbat|pyaar?|zindagi|dilbar|tujh(se|e)?|sajna|sanam|naagin|patola|bhangra|dhol|jatta|balle|nachna|nachle|vekhna|lagdi|akh\s+lad|bol\s+do|tere\s+bin|tu\s+hi|kuch\s+kuch|desi\s+girl|soni\s+de|sandamali|adaraya|obata|sinhala)\b/i;
+
+// K-pop and wider East Asian pop acts — matched against artist name.
+// Using artist rather than title because many songs have English titles (e.g. "Dynamite", "Butter", "Soda Pop").
+const KPOP_ARTISTS = new Set([
+  // 1st–3rd gen K-pop
+  'bts','blackpink','exo','twice','nct','nct 127','nct dream','wayv',
+  'stray kids','itzy','aespa','newjeans','(g)i-dle','enhypen','txt',
+  'tomorrow x together','monsta x','got7','shinee','bigbang','2ne1',
+  'iu','ive','le sserafim','seventeen','ateez','nmixx','red velvet',
+  'super junior','girls generation','snsd','mamamoo','winner','ikon',
+  'the boyz','pentagon','sf9','day6','btob','astro','sunmi','chungha',
+  'hwasa','hyuna','somi','zerobaseone','tws','kiss of life','triples',
+  // 4th gen / newer
+  'boynextdoor','riize','illit','fantasy boys','nowadays','hearts2hearts',
+  'cravity','drippin','ghost9','oneus','onewe','victon','verivery',
+  'kingdom','treasure','babymetal','xg','kep1er','weeekly','rocket punch',
+  // J-pop / C-pop crossovers that surface in English searches
+  'yoasobi','ado','kenshi yonezu','fujii kaze','official hige dandism','king gnu',
+  'saja boys',
+]);
+
+// Non-Western artists whose names/titles are fully Latin-script (can't be caught by script check).
+// Extend whenever a specific artist is reported — the SOUTH_ASIAN_TITLE_RE handles most cases.
+const BLOCKED_ARTISTS = new Set([
+  'sujallkxattri','pratigya',  // Indian
+  'shan putha',                 // Sri Lankan
+]);
+
+// Specific titles manually flagged — last resort for songs that pass all regex/set checks
+const BLOCKED_TITLES = new Set([
+  'yalla',      // Arabic (also caught by ARABIC_TITLE_RE)
+  'sarak sarak', // Indian — no matching keyword pattern
+  'soda pop',   // K-pop — artist now in KPOP_ARTISTS, kept as fallback
+]);
+
+function isPoolEligible(track) {
+  const titleLower  = track.title.toLowerCase().trim();
+  const artistLower = track.artist.toLowerCase().trim();
+  const combined    = `${track.title} ${track.artist}`;
+
+  if (NON_LATIN_RE.test(combined))               return false; // non-Latin script
+  if (FILM_SONG_RE.test(track.title))            return false; // Indian film tag
+  if (BAD_VERSION_RE.test(track.title))          return false; // karaoke / instrumental / cover
+  if (ARABIC_TITLE_RE.test(track.title))         return false; // Arabic title words
+  if (SOUTH_ASIAN_TITLE_RE.test(track.title))    return false; // South Asian title words
+  if (KPOP_ARTISTS.has(artistLower))             return false; // K-pop/East Asian artist
+  if (BLOCKED_TITLES.has(titleLower))            return false; // manual title blocklist
+  // Split collab artist fields (handles "Artist A x Artist B", "feat.", "&", etc.)
+  const artistTokens = artistLower.split(/\s*[x&,\/]\s*|\s+feat\.?\s+/i).map(t => t.trim()).filter(Boolean);
+  if (artistTokens.some(t => KPOP_ARTISTS.has(t) || BLOCKED_ARTISTS.has(t))) return false;
+  return true;
+}
+
+// Official YouTube Music chart/curated playlists — searched by name so we get the
+// real curated playlist, not songs whose title contains these words.
+// These resolve to the actual official YouTube Music / Spotify-mirror curated playlists.
+// Kept tight intentionally — fewer, higher-quality playlists beats a broad dump.
+const CHART_PLAYLIST_QUERIES = [
+  'Hot Hits USA',
+  'Today\'s Hits',
+];
+
+async function buildCacheFromCharts() {
+  if (!ytmusicReady) return;
+  try {
+    console.log('📊 Fetching chart playlists from YouTube Music...');
+    const collected = [];
+    const seenTracks = new Set();
+
+    for (const q of CHART_PLAYLIST_QUERIES) {
+      try {
+        const { data: playlists } = await axios.get(`${YTMUSIC_SERVICE_URL}/search/playlists`, { params: { q }, timeout: 15000 });
+        if (!playlists.length) { console.warn(`  No playlist found for "${q}"`); continue; }
+        const playlist = playlists[0]; // first result is the official playlist
+        console.log(`  "${q}" → "${playlist.name}" (${playlist.playlistId})`);
+        const { data: videos } = await axios.get(`${YTMUSIC_SERVICE_URL}/playlist/tracks`, { params: { id: playlist.playlistId, limit: 100 }, timeout: 20000 });
+        let added = 0;
+        for (const video of videos) {
+          if (!video.videoId || !video.duration) continue;
+          if (seenTracks.has(video.videoId)) continue;
+          seenTracks.add(video.videoId);
+          const track = mapYtmSongToTrack(video);
+          if (!isValidSongDuration(track.duration)) continue;
+          if (!isPoolEligible(track)) continue;
+          collected.push(track);
+          added++;
+        }
+        console.log(`  ✓ ${added}/${videos.length} songs added`);
       } catch (err) {
-        console.warn(`Search query "${q}" failed:`, err.response?.data?.error?.message || err.message);
+        console.warn(`  Chart playlist "${q}" failed:`, err.message);
       }
     }
-    const seen = new Set();
-    const unique = collected.filter(t => seen.has(t.trackId) ? false : seen.add(t.trackId));
-    if (unique.length > 0) {
-      poolSources.genre = unique;
-      console.log(`✓ Genre search: ${unique.length} tracks fetched`);
+
+    if (collected.length > 0) {
+      poolSources.charts = collected;
+      console.log(`✓ Charts pool: ${collected.length} unique songs from ${CHART_PLAYLIST_QUERIES.length} playlists`);
       mergePool();
     } else {
-      console.warn('Search cache build yielded no tracks — using static fallback only');
-      await enrichStaticFallbackArt();
+      console.warn('⚠ Charts: no songs found');
     }
   } catch (err) {
-    console.error('Failed to build cache from search:', err.message);
-    await enrichStaticFallbackArt();
+    console.warn('Charts build failed:', err.message);
   }
+}
+
+async function buildCacheFromMoods() {
+  if (!ytmusicReady || activeMoodIds.size === 0) { poolSources.moods = []; return; }
+  console.log(`🎭 Building moods pool (${activeMoodIds.size} active)...`);
+  const collected = [];
+  const seenTracks = new Set();
+
+  for (const mood of AVAILABLE_MOODS.filter(m => activeMoodIds.has(m.id))) {
+    try {
+      const { data: playlists } = await axios.get(`${YTMUSIC_SERVICE_URL}/search/playlists`, { params: { q: mood.query }, timeout: 15000 });
+      if (!playlists.length) { console.warn(`  No playlist for mood "${mood.name}"`); continue; }
+      const playlist = playlists[0];
+      const { data: videos } = await axios.get(`${YTMUSIC_SERVICE_URL}/playlist/tracks`, { params: { id: playlist.playlistId, limit: 100 }, timeout: 20000 });
+      let added = 0;
+      for (const video of videos) {
+        if (!video.videoId || !video.duration) continue;
+        if (seenTracks.has(video.videoId)) continue;
+        seenTracks.add(video.videoId);
+        const track = mapYtmSongToTrack(video);
+        if (!isValidSongDuration(track.duration)) continue;
+        if (!isPoolEligible(track)) continue;
+        collected.push(track);
+        added++;
+      }
+      console.log(`  ✓ ${mood.emoji} ${mood.name} → "${playlist.name}": ${added} songs`);
+    } catch (err) {
+      console.warn(`  Mood "${mood.name}" failed:`, err.message);
+    }
+  }
+
+  const seen = new Set();
+  poolSources.moods = collected.filter(t => seen.has(t.trackId) ? false : seen.add(t.trackId));
+  console.log(`✓ Moods pool: ${poolSources.moods.length} unique songs`);
 }
 
 async function buildCacheFromArtists() {
-  if (artistSeeds.length === 0) {
-    poolSources.artist = [];
-    return;
-  }
-  const token = await getClientCredentialsToken();
-  if (!token) return;
+  if (artistSeeds.length === 0) { poolSources.artist = []; return; }
+  const norm = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const collected = [];
   for (const seed of artistSeeds) {
     try {
-      // /artists/{id}/top-tracks is restricted on lower API tiers — use search instead
-      const { data } = await axios.get(
-        `https://api.spotify.com/v1/search?q=artist:${encodeURIComponent(seed.artistName)}&type=track&limit=10&market=US`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      for (const t of data.tracks?.items || []) {
-        if (!t?.id) continue;
-        if (BLOCK_EXPLICIT && t.explicit) continue;
-        collected.push({
-          trackId: t.id,
-          title: t.name,
-          artist: t.artists.map(a => a.name).join(', '),
-          album: t.album.name,
-          albumArt: t.album.images[1]?.url || t.album.images[0]?.url || null,
-          explicit: t.explicit,
-          popularity: typeof t.popularity === 'number' ? t.popularity : null,
-          uri: t.uri,
-          seedArtistId: seed.artistId,
+      if (ytmusicReady) {
+        const songLimit = seed.limit || 20;
+        const { data: songs } = await axios.get(`${YTMUSIC_SERVICE_URL}/search/songs`, {
+          params: { q: seed.artistName, limit: Math.min(songLimit * 3, 50) },
+          timeout: 15000,
         });
+        let added = 0;
+        for (const song of songs) {
+          if (added >= songLimit) break;
+          if (!song.videoId || !song.duration) continue;
+          // Keep only songs where the artist name matches (handles "feat." variants + accented names)
+          const songArtistNorm = norm(song.artist || '');
+          const seedArtistNorm = norm(seed.artistName);
+          if (!songArtistNorm.includes(seedArtistNorm) && !seedArtistNorm.includes(songArtistNorm)) continue;
+          const track = mapYtmSongToTrack(song);
+          if (!isValidSongDuration(track.duration)) continue;
+          if (!isPoolEligible(track)) continue;
+          collected.push({ ...track, seedArtistId: seed.channelId });
+          added++;
+        }
+        console.log(`✓ YTMusic artist "${seed.artistName}": ${added}/${songLimit} songs added`);
+      } else if (YOUTUBE_API_KEY && YOUTUBE_API_KEY !== 'YOUR_YOUTUBE_API_KEY_HERE') {
+        const items = await ytSearch(`${seed.artistName} official audio`, 10);
+        const videoIds = items.map(i => i.id?.videoId).filter(Boolean);
+        if (!videoIds.length) continue;
+        const details = await ytVideoDetails(videoIds);
+        details.sort((a, b) => scoreYtItem(b) - scoreYtItem(a));
+        for (const item of details) {
+          if (!item.id) continue;
+          const track = mapVideoItemToTrack(item);
+          if (!isValidSongDuration(track.duration)) continue;
+          collected.push({ ...track, seedArtistId: seed.channelId });
+        }
+        console.log(`✓ Fallback artist "${seed.artistName}": fetched`);
       }
-      console.log(`✓ Fetched tracks for artist: ${seed.artistName}`);
     } catch (err) {
-      console.warn(`Failed to fetch tracks for ${seed.artistName}:`, err.response?.data?.error?.message || err.message);
+      console.warn(`Failed to fetch tracks for ${seed.artistName}:`, err.message);
     }
   }
   const seen = new Set();
@@ -322,40 +636,158 @@ async function buildCacheFromArtists() {
 
 async function ensureCacheBuilt() {
   if (playlistCache.bar.length === 0) {
-    await buildCacheFromSearch();
-    if (artistSeeds.length > 0) {
-      await buildCacheFromArtists();
-      mergePool();
-    }
+    await buildCacheFromCharts();
+    await buildCacheFromMoods();
+    if (artistSeeds.length > 0) await buildCacheFromArtists();
+    mergePool();
+    enrichPoolWithViewCounts().catch(() => {});
+    enrichPoolWithLastFm().catch(() => {});
   }
 }
 
-async function enrichStaticFallbackArt() {
-  // Uses iTunes Search API — no auth required, always available
-  let enriched = 0;
-  for (const track of STATIC_FALLBACK_TRACKS) {
-    if (track.albumArt) continue;
+async function rebuildPool() {
+  await buildCacheFromCharts();
+  await buildCacheFromMoods();
+  if (artistSeeds.length > 0) await buildCacheFromArtists();
+  mergePool();
+  enrichPoolWithViewCounts().catch(() => {});
+  enrichPoolWithLastFm().catch(() => {});
+}
+
+// Fetch YouTube view counts for pool tracks and store on the track objects.
+// Uses a persistent cache so counts survive pool rebuilds without re-fetching.
+// Runs async after pool build — recommendations fall back to unscored until done.
+async function enrichPoolWithViewCounts() {
+  if (!YOUTUBE_API_KEY || YOUTUBE_API_KEY === 'YOUR_YOUTUBE_API_KEY_HERE') return;
+
+  // Apply already-cached values immediately
+  for (const t of playlistCache.bar) {
+    if (viewCountCache.has(t.trackId)) t.viewCount = viewCountCache.get(t.trackId);
+  }
+
+  const uncached = playlistCache.bar.filter(t => !viewCountCache.has(t.trackId));
+  if (!uncached.length) return;
+
+  console.log(`📊 Fetching view counts for ${uncached.length} new tracks...`);
+  const ids = uncached.map(t => t.trackId);
+
+  for (let i = 0; i < ids.length; i += 50) {
     try {
-      const term = encodeURIComponent(`${track.title} ${track.artist}`);
-      const { data } = await axios.get(`https://itunes.apple.com/search?term=${term}&media=music&entity=song&limit=1`);
-      const result = data.results?.[0];
-      if (result?.artworkUrl100) {
-        track.albumArt = result.artworkUrl100.replace('100x100bb', '300x300bb');
-        enriched++;
+      const { data } = await axios.get(`${YT_API}/videos`, {
+        params: { part: 'statistics', id: ids.slice(i, i + 50).join(','), key: YOUTUBE_API_KEY },
+      });
+      for (const item of data.items || []) {
+        const count = parseInt(item.statistics?.viewCount || '0', 10);
+        viewCountCache.set(item.id, count);
+        // Apply to pool track in-place
+        const t = playlistCache.bar.find(t => t.trackId === item.id);
+        if (t) t.viewCount = count;
       }
     } catch (err) {
-      // silent — grey box is fine as last resort
+      console.warn(`View count batch ${Math.floor(i / 50) + 1} failed:`, err.message);
     }
   }
-  if (enriched > 0) {
-    console.log(`✓ Got album art for ${enriched} static fallback tracks via iTunes`);
-    // Patch any already-queued fallback items (no broadcast — don't disrupt playback state)
-    for (const item of [...queue, currentTrack, targetTrack].filter(Boolean)) {
-      if (!item.isFallback) continue;
-      const src = STATIC_FALLBACK_TRACKS.find(t => t.trackId === item.trackId);
-      if (src?.albumArt) item.albumArt = src.albumArt;
+  console.log(`✓ View count cache: ${viewCountCache.size} tracks`);
+}
+
+// ─── Last.fm Tag Enrichment ───────────────────────────────────────────────────
+// Maps Last.fm user tags → energy and danceability scores (0–1).
+// Tags with higher counts carry more weight in the final score.
+const LFM_ENERGY_TAGS = {
+  // Very high
+  'high energy': 1.0, 'energetic': 1.0, 'pump up': 1.0, 'banger': 1.0,
+  'workout': 0.95, 'hype': 0.95, 'intense': 0.9, 'hard rock': 0.9,
+  'upbeat': 0.85, 'party anthem': 0.9, 'driving': 0.85,
+  // High
+  'party': 0.8, 'dance': 0.75, 'club': 0.8, 'fast': 0.8,
+  'electronic': 0.7, 'hip hop': 0.65, 'rock': 0.65, 'punk': 0.8,
+  // Medium
+  'pop': 0.55, 'indie': 0.5, 'funk': 0.6, 'rnb': 0.55, 'r&b': 0.55,
+  'soul': 0.5, 'reggae': 0.5,
+  // Low
+  'chill': 0.2, 'chillout': 0.15, 'mellow': 0.2, 'laid back': 0.2,
+  'acoustic': 0.3, 'singer-songwriter': 0.3, 'slow': 0.15,
+  // Very low
+  'ambient': 0.1, 'sleep': 0.05, 'relaxing': 0.1, 'sad': 0.2,
+  'melancholic': 0.2, 'ballad': 0.2, 'classical': 0.15, 'jazz': 0.35,
+};
+
+const LFM_DANCE_TAGS = {
+  // Very high
+  'dance': 1.0, 'danceable': 1.0, 'club': 0.95, 'disco': 0.95,
+  'house': 0.95, 'techno': 0.9, 'edm': 0.9, 'trance': 0.85,
+  'electronic dance': 1.0, 'groove': 0.85, 'funky': 0.85,
+  // High
+  'funk': 0.8, 'latin': 0.8, 'reggaeton': 0.85, 'hip hop': 0.75,
+  'rnb': 0.75, 'r&b': 0.75, 'pop': 0.65, 'party': 0.8,
+  // Medium
+  'rock': 0.45, 'indie': 0.4, 'soul': 0.55,
+  // Low
+  'acoustic': 0.2, 'ballad': 0.15, 'ambient': 0.1,
+  'classical': 0.1, 'sad': 0.15, 'slow': 0.1,
+};
+
+function scoreLastFmTags(tags, tagMap) {
+  if (!tags?.length) return null;
+  let weightedSum = 0, totalWeight = 0;
+  for (const tag of tags.slice(0, 12)) {
+    const name = tag.name.toLowerCase().trim();
+    if (name in tagMap) {
+      weightedSum += tagMap[name] * tag.count;
+      totalWeight += tag.count;
     }
   }
+  return totalWeight > 0 ? weightedSum / totalWeight : null;
+}
+
+async function enrichPoolWithLastFm() {
+  if (!LASTFM_API_KEY) return;
+
+  // Apply cached values immediately so recommendations benefit without waiting
+  for (const t of playlistCache.bar) {
+    if (lastFmCache.has(t.trackId)) {
+      Object.assign(t, lastFmCache.get(t.trackId));
+    }
+  }
+
+  const uncached = playlistCache.bar.filter(t => !lastFmCache.has(t.trackId));
+  if (!uncached.length) return;
+
+  console.log(`🎵 Fetching Last.fm tags for ${uncached.length} tracks...`);
+  let fetched = 0, failed = 0;
+
+  for (const track of uncached) {
+    try {
+      const { data } = await axios.get('https://ws.audioscrobbler.com/2.0/', {
+        params: {
+          method:  'track.getTopTags',
+          artist:  track.artist,
+          track:   cleanTitle(track.title), // strip "(Official Video)" etc.
+          api_key: LASTFM_API_KEY,
+          format:  'json',
+          autocorrect: 1,
+        },
+        timeout: 6000,
+      });
+
+      const tags = data?.toptags?.tag || [];
+      const energy      = scoreLastFmTags(tags, LFM_ENERGY_TAGS);
+      const danceability = scoreLastFmTags(tags, LFM_DANCE_TAGS);
+      const result = { lfmEnergy: energy, lfmDance: danceability };
+
+      lastFmCache.set(track.trackId, result);
+      Object.assign(track, result);
+      fetched++;
+    } catch {
+      failed++;
+      lastFmCache.set(track.trackId, { lfmEnergy: null, lfmDance: null }); // cache miss so we don't retry
+    }
+
+    // 200ms between requests → stays well under Last.fm's 5 req/sec limit
+    await new Promise(r => setTimeout(r, 200));
+  }
+
+  console.log(`✓ Last.fm enrichment: ${fetched} tagged, ${failed} missed`);
 }
 
 // ─── Queue Helpers ────────────────────────────────────────────────────────────
@@ -364,16 +796,8 @@ const sortQueue = () => queue.sort((a, b) => b.votes - a.votes || a.addedAt - b.
 function queueState() {
   return {
     queue: queue.map(item => ({ ...item, voters: Array.from(item.voters) })),
-    currentTrack: currentTrack ? { 
-      ...currentTrack, 
-      voters: Array.from(currentTrack.voters),
-      uri: `spotify:track:${currentTrack.trackId}`
-    } : null,
-    targetTrack: targetTrack ? {
-      ...targetTrack,
-      voters: Array.from(targetTrack.voters),
-      uri: `spotify:track:${targetTrack.trackId}`
-    } : null,
+    currentTrack: currentTrack ? { ...currentTrack, voters: Array.from(currentTrack.voters) } : null,
+    targetTrack:  targetTrack  ? { ...targetTrack,  voters: Array.from(targetTrack.voters)  } : null,
   };
 }
 
@@ -383,33 +807,71 @@ function broadcast() {
 
 function sanitizeTrack(track) {
   if (!track) return null;
-  return {
-    ...track,
-    voters: Array.from(track.voters),
-    uri: `spotify:track:${track.trackId}`,
-  };
+  return { ...track, voters: Array.from(track.voters) };
+}
+
+// Resolve a single track to its pure-audio version using ytmusicapi videoType.
+// Searches for the song by title+artist and picks the first result with
+// videoType === 'MUSIC_VIDEO_TYPE_ATV' (Audio Track Version — what YouTube Music
+// uses natively; never a music video).
+async function resolveTrackAudio(item) {
+  if (!item || item._audioResolved) return;
+  item._audioResolved = true;
+  if (!ytmusicReady) return;
+  try {
+    const { data: songs } = await axios.get(`${YTMUSIC_SERVICE_URL}/search/songs`, {
+      params: { q: `${item.title} ${item.artist}`, limit: 10 },
+      timeout: 8000,
+    });
+    const audioTrack = songs.find(s => s.videoType === 'MUSIC_VIDEO_TYPE_ATV' && s.videoId);
+    if (!audioTrack) {
+      console.log(`🎵 No ATV found for "${item.title}" — keeping ${item.trackId}`);
+      return;
+    }
+    if (audioTrack.videoId !== item.trackId) {
+      console.log(`🎵 Audio resolved: "${item.title}" ${item.trackId} → ${audioTrack.videoId}`);
+      item.trackId    = audioTrack.videoId;
+      item.isTopicAudio = true;
+    } else {
+      console.log(`🎵 Already ATV: "${item.title}" (${item.trackId})`);
+    }
+  } catch (err) {
+    console.warn(`resolveTrackAudio failed for "${item.title}":`, err.message);
+  }
+}
+
+// Pre-warm: resolve the top N queue items in the background while the current song plays.
+// Broadcasts after resolving so the host immediately gets the corrected videoIds
+// and doesn't pre-load the original music-video version.
+async function resolveQueueAudio(limit = 2) {
+  const toResolve = queue.filter(item => !item._audioResolved).slice(0, limit);
+  if (!toResolve.length) return;
+  const before = toResolve.map(i => i.trackId);
+  for (const item of toResolve) await resolveTrackAudio(item);
+  const changed = toResolve.some((item, idx) => item.trackId !== before[idx]);
+  if (changed) broadcast(); // push corrected videoIds to host before it pre-loads anything
 }
 
 async function ensureQueueHasUpcomingTrack() {
   if (queue.length > 0) return false;
   try {
-    const tracks = await fetchSpotifyRecommendations(1);
+    const tracks = await fetchRecommendations(1);
     if (tracks?.length) {
       const t = tracks[0];
       queue.push({
         id: 'fallback_' + uuidv4(),
-        trackId: t.trackId,
-        title: t.title,
-        artist: t.artist,
-        album: t.album,
+        trackId:  t.trackId,
+        title:    t.title,
+        artist:   t.artist,
+        album:    t.album,
         albumArt: t.albumArt,
         explicit: t.explicit,
-        uri: t.uri,
-        votes: 0,
-        voters: new Set(),
-        addedAt: Date.now(),
+        votes:    0,
+        voters:   new Set(),
+        addedAt:  Date.now(),
         isFallback: true,
       });
+      resolveQueueAudio(1).catch(() => {}); // resolve immediately while previous song still plays
       return true;
     }
   } catch (err) {
@@ -418,9 +880,16 @@ async function ensureQueueHasUpcomingTrack() {
   return false;
 }
 
-function markTrackAsPlayed(trackId) {
-  if (trackId) {
-    recentlyPlayed.set(trackId, Date.now());
+function markTrackAsPlayed(trackOrId) {
+  const trackId = typeof trackOrId === 'string' ? trackOrId : trackOrId?.trackId;
+  if (!trackId) return;
+  recentlyPlayed.set(trackId, Date.now());
+  // Track recent artists for spread enforcement in fetchRecommendations
+  const artist = (typeof trackOrId === 'object' ? trackOrId?.artist : null)
+    || playlistCache.bar.find(t => t.trackId === trackId)?.artist;
+  if (artist) {
+    const norm = artist.toLowerCase().trim();
+    recentArtists = [norm, ...recentArtists.filter(a => a !== norm)].slice(0, 3);
   }
 }
 
@@ -429,89 +898,23 @@ let advanceInProgress = false;
 async function advanceToNextTrack() {
   if (advanceInProgress) return sanitizeTrack(currentTrack);
   const now = Date.now();
-  if (now - lastTrackChange < 3000) {
-    return sanitizeTrack(currentTrack);
-  }
+  if (now - lastTrackChange < 3000) return sanitizeTrack(currentTrack);
   advanceInProgress = true;
   try {
-
-  await ensureQueueHasUpcomingTrack();
-  const next = queue.shift();
-  if (next?.isFallback) {
-    console.log('🎵 Queue empty - playing fallback:', next.title, '-', next.artist);
-  }
-
-  targetTrack = next;
-  if (next?.trackId) {
-    markTrackAsPlayed(next.trackId);
-  }
-  lastTrackChange = now;
-  await ensureQueueHasUpcomingTrack();
-
-  broadcast();
-  return sanitizeTrack(next);
+    await ensureQueueHasUpcomingTrack();
+    const next = queue.shift();
+    if (next?.isFallback) console.log('🎵 Queue empty - playing fallback:', next.title, '-', next.artist);
+    await resolveTrackAudio(next); // await BEFORE broadcasting — host gets the resolved ID
+    targetTrack = next;
+    if (next?.trackId) markTrackAsPlayed(next);
+    lastTrackChange = now;
+    await ensureQueueHasUpcomingTrack();
+    broadcast();
+    return sanitizeTrack(next);
   } finally {
     advanceInProgress = false;
   }
 }
-
-// ─── Auth Routes ──────────────────────────────────────────────────────────────
-app.get('/auth/login', (req, res) => {
-  res.redirect('https://accounts.spotify.com/authorize?' + querystring.stringify({
-    response_type: 'code',
-    client_id: CLIENT_ID,
-    scope: SCOPES,
-    redirect_uri: REDIRECT_URI,
-  }));
-});
-
-app.get('/auth/callback', async (req, res) => {
-  const { code, error, state } = req.query;
-  if (error) return res.redirect(state === 'pkce' ? '/admin.html?spotify=error' : '/host.html?auth=error');
-  // PKCE flow: pass code back to admin.html — browser does the token exchange
-  if (state === 'pkce') return res.redirect(`/admin.html?code=${encodeURIComponent(code)}`);
-  try {
-    const { data } = await axios.post(
-      'https://accounts.spotify.com/api/token',
-      querystring.stringify({ grant_type: 'authorization_code', code, redirect_uri: REDIRECT_URI }),
-      { headers: authHeader() }
-    );
-    spotifyTokens.accessToken  = data.access_token;
-    spotifyTokens.refreshToken = data.refresh_token;
-    spotifyTokens.expiresAt    = Date.now() + data.expires_in * 1000;
-    ensureCacheBuilt().catch(err => console.warn('Post-auth cache build failed:', err.message));
-    res.redirect('/host.html?auth=success');
-  } catch (err) {
-    console.error('Auth error:', err.response?.data);
-    res.redirect('/host.html?auth=error');
-  }
-});
-
-app.get('/api/config', (req, res) => {
-  res.json({ clientId: CLIENT_ID, redirectUri: REDIRECT_URI });
-});
-
-app.get('/auth/token', async (req, res) => {
-  try {
-    const token = await getToken();
-    if (!token) return res.status(401).json({ error: 'Not authenticated' });
-    res.json({ accessToken: token });
-  } catch (err) {
-    spotifyTokens = { accessToken: null, refreshToken: null, expiresAt: 0 };
-    console.error('Token error:', err.response?.data || err.message);
-    res.status(401).json({ error: 'Spotify authentication expired' });
-  }
-});
-
-app.get('/auth/status', async (req, res) => {
-  try {
-    const token = await getToken();
-    res.json({ authenticated: !!token });
-  } catch (err) {
-    spotifyTokens = { accessToken: null, refreshToken: null, expiresAt: 0 };
-    res.json({ authenticated: false });
-  }
-});
 
 // ─── Admin Middleware ─────────────────────────────────────────────────────────
 function requireAdmin(req, res, next) {
@@ -524,52 +927,25 @@ function requireAdmin(req, res, next) {
 app.get('/api/search', async (req, res) => {
   const { q } = req.query;
   if (!q?.trim()) return res.status(400).json({ error: 'Query required' });
-
   try {
-    const queryLower = q.trim().toLowerCase();
-    const isGenre = SEED_GENRES.includes(queryLower);
-    const token = await getClientCredentialsToken();
-    if (!token) return res.status(500).json({ error: 'Failed to authenticate with Spotify' });
-
-    if (isGenre) {
-      // Search for genre using Spotify's genre filter
-      const searchUrl = `https://api.spotify.com/v1/search?q=genre:${encodeURIComponent(queryLower)}&type=track&limit=10&market=US`;
-      const { data } = await axios.get(searchUrl, {
-        headers: { Authorization: `Bearer ${token}` },
+    if (ytmusicReady) {
+      // Python ytmusicapi — returns only songs from the music catalog, never videos/junk
+      const { data: songs } = await axios.get(`${YTMUSIC_SERVICE_URL}/search/songs`, {
+        params: { q: q.trim(), limit: 20 },
+        timeout: 10000,
       });
-
-      let tracks = data.tracks.items;
-      if (BLOCK_EXPLICIT) tracks = tracks.filter(t => !t.explicit);
-
-      res.json(tracks.map(t => ({
-        trackId:  t.id,
-        title:    t.name,
-        artist:   t.artists.map(a => a.name).join(', '),
-        album:    t.album.name,
-        albumArt: t.album.images[1]?.url || t.album.images[0]?.url || null,
-        explicit: t.explicit,
-        duration: t.duration_ms,
-      })));
-    } else {
-      // Regular track search for non-genres
-      const searchUrl = `https://api.spotify.com/v1/search?q=${encodeURIComponent(q)}&type=track&limit=10`;
-      const { data } = await axios.get(searchUrl, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      let tracks = data.tracks.items;
-      if (BLOCK_EXPLICIT) tracks = tracks.filter(t => !t.explicit);
-
-      res.json(tracks.map(t => ({
-        trackId:  t.id,
-        title:    t.name,
-        artist:   t.artists.map(a => a.name).join(', '),
-        album:    t.album.name,
-        albumArt: t.album.images[1]?.url || t.album.images[0]?.url || null,
-        explicit: t.explicit,
-        duration: t.duration_ms,
-      })));
+      return res.json(songs.filter(s => s.videoId && s.duration).map(mapYtmSongToTrack));
     }
+    // Fallback: YouTube Data API with Topic-channel preference
+    if (!YOUTUBE_API_KEY || YOUTUBE_API_KEY === 'YOUR_YOUTUBE_API_KEY_HERE') {
+      return res.status(500).json({ error: 'No search backend available' });
+    }
+    const items = await ytSearch(q.trim(), 15);
+    const videoIds = items.map(i => i.id?.videoId).filter(Boolean);
+    if (!videoIds.length) return res.json([]);
+    const details = await ytVideoDetails(videoIds);
+    details.sort((a, b) => scoreYtItem(b) - scoreYtItem(a));
+    res.json(details.map(mapVideoItemToTrack));
   } catch (err) {
     console.error('Search error:', err.response?.data || err.message);
     res.status(500).json({ error: 'Search failed' });
@@ -579,28 +955,16 @@ app.get('/api/search', async (req, res) => {
 app.get('/api/suggestions', async (req, res) => {
   try {
     const excludeIds = new Set([...queue.map(t => t.trackId), currentTrack?.trackId].filter(Boolean));
-
-    if (!playlistCache.bar || playlistCache.bar.length === 0) {
-      // Use static fallback when playlist cache is unavailable
-      const fallback = STATIC_FALLBACK_TRACKS.filter(t => !excludeIds.has(t.trackId));
-      return res.json(shuffleArray(fallback).slice(0, 9));
-    }
-
+    if (!playlistCache.bar || playlistCache.bar.length === 0) return res.json([]);
     const suggestions = [];
     let attempts = 0;
-    const maxAttempts = playlistCache.bar.length * 2; // Prevent infinite loop
-
-    // Collect 9 tracks, skipping ones already in queue
+    const maxAttempts = playlistCache.bar.length * 2;
     while (suggestions.length < 9 && attempts < maxAttempts) {
       const track = playlistCache.bar[suggestionRotationIndex];
       suggestionRotationIndex = (suggestionRotationIndex + 1) % playlistCache.bar.length;
       attempts++;
-
-      if (track && !excludeIds.has(track.trackId)) {
-        suggestions.push(track);
-      }
+      if (track && !excludeIds.has(track.trackId)) suggestions.push(track);
     }
-
     res.json(suggestions);
   } catch (err) {
     console.error('Suggestions error:', err.message);
@@ -608,62 +972,7 @@ app.get('/api/suggestions', async (req, res) => {
   }
 });
 
-// ─── Spotify Playlist Helpers ─────────────────────────────────────────────────
-async function fetchAllUserPlaylists(token) {
-  const playlists = [];
-  let url = 'https://api.spotify.com/v1/me/playlists?limit=50';
-  while (url) {
-    const { data } = await axios.get(url, { headers: { Authorization: `Bearer ${token}` } });
-    playlists.push(...(data.items || []).filter(Boolean));
-    url = data.next || null;
-  }
-  return playlists;
-}
-
-async function fetchPlaylistTracks(token, playlistId) {
-  // Fetch first page — response includes total count
-  const { data: firstPage } = await axios.get(
-    `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&offset=0`,
-    { headers: { Authorization: `Bearer ${token}` } }
-  );
-  const total = firstPage.total || 0;
-  console.log(`[spotify-import] playlist ${playlistId}: total=${total}`);
-  const allItems = [...(firstPage.items || [])];
-
-  // Fetch remaining pages concurrently if needed
-  if (total > 100) {
-    const offsets = [];
-    for (let i = 100; i < total; i += 100) offsets.push(i);
-    const pages = await Promise.all(offsets.map(offset =>
-      axios.get(
-        `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&offset=${offset}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      ).then(r => r.data.items || [])
-    ));
-    for (const page of pages) allItems.push(...page);
-  }
-
-  const tracks = [];
-  for (const item of allItems) {
-    const t = item?.track;
-    if (!t?.id) continue; // skip null tracks and episodes
-    if (BLOCK_EXPLICIT && t.explicit) continue;
-    tracks.push({
-      trackId:   t.id,
-      title:     t.name,
-      artist:    t.artists.map(a => a.name).join(', '),
-      album:     t.album.name,
-      albumArt:  t.album.images[1]?.url || t.album.images[0]?.url || null,
-      explicit:  t.explicit,
-      popularity: typeof t.popularity === 'number' ? t.popularity : null,
-      uri:       t.uri,
-    });
-  }
-  console.log(`[spotify-import] playlist ${playlistId}: mapped ${tracks.length} playable tracks`);
-  return tracks;
-}
-
-// ─── CSV Parser (Exportify format) ───────────────────────────────────────────
+// ─── CSV Parser (videoId,title,artist,album,albumArt) ─────────────────────────
 function parseCSVLine(line) {
   const result = [];
   let current = '';
@@ -683,33 +992,24 @@ function parseCSVLine(line) {
   return result;
 }
 
-function parseExportifyCSV(csvText) {
+function parseYouTubeCSV(csvText) {
   const lines = csvText.split('\n').map(l => l.trimEnd()).filter(l => l.length > 0);
   if (lines.length < 2) return [];
   const tracks = [];
   for (let i = 1; i < lines.length; i++) {
     try {
       const cols = parseCSVLine(lines[i]);
-      if (cols.length < 16) continue;
-      // Col 0: Track URI  e.g. "spotify:track:2E2ZVy2fxslpAUgbb4zu84"
-      const uri = cols[0];
-      const trackId = uri.includes(':') ? uri.split(':').pop() : uri;
-      if (!trackId || trackId.length < 10) continue;
-      const explicit = cols[14].toLowerCase() === 'true';
-      if (BLOCK_EXPLICIT && explicit) continue;
-      const popularityRaw = cols[15];
-      const popularity = popularityRaw !== '' && !isNaN(parseInt(popularityRaw, 10))
-        ? parseInt(popularityRaw, 10) : null;
-      // Col 9: Album Image URL
+      if (cols.length < 2) continue;
+      const trackId = cols[0].trim();
+      if (!trackId || trackId.length < 5) continue;
       tracks.push({
         trackId,
-        title:    cols[1],
-        artist:   cols[3],
-        album:    cols[5],
-        albumArt: cols[9] || null,
-        explicit,
-        popularity,
-        uri: `spotify:track:${trackId}`,
+        title:    cols[1] || 'Unknown',
+        artist:   cols[2] || 'Unknown',
+        album:    cols[3] || '',
+        albumArt: cols[4] || null,
+        explicit: false,
+        popularity: null,
       });
     } catch (_) { /* skip malformed line */ }
   }
@@ -718,28 +1018,28 @@ function parseExportifyCSV(csvText) {
 
 // ─── Pool Management ──────────────────────────────────────────────────────────
 app.get('/api/pool', requireAdmin, (req, res) => {
-  const passFloor = t => t.popularity === null || t.popularity === undefined || t.popularity >= poolSettings.minPopularity;
-  const passing = (source) => poolSources[source].filter(passFloor).length;
   res.json({
     mode: poolMode,
-    settings: poolSettings,
+    artistDiscoveryRatio,
+    activeMoodIds: [...activeMoodIds],
     artistSeeds,
     csvPlaylists: csvPlaylists.map(p => ({ name: p.name, trackCount: p.tracks.length, addedAt: p.addedAt })),
     sources: {
-      csv:    { total: poolSources.csv.length,    passing: passing('csv') },
-      genre:  { total: poolSources.genre.length,  passing: passing('genre') },
-      artist: { total: poolSources.artist.length, passing: passing('artist') },
+      csv:    { total: poolSources.csv.length },
+      charts: { total: poolSources.charts.length },
+      moods:  { total: poolSources.moods.length },
+      genre:  { total: poolSources.genre.length },
+      artist: { total: poolSources.artist.length },
       pinned: { total: poolSources.pinned.length },
     },
     totalInPool: playlistCache.bar.length,
     tracks: playlistCache.bar.map(t => ({
-      trackId:    t.trackId,
-      title:      t.title,
-      artist:     t.artist,
-      albumArt:   t.albumArt,
-      popularity: t.popularity ?? null,
-      source:     t.source || 'genre',
-      explicit:   t.explicit,
+      trackId:  t.trackId,
+      title:    t.title,
+      artist:   t.artist,
+      albumArt: t.albumArt,
+      source:   t.source || 'genre',
+      explicit: t.explicit,
     })),
   });
 });
@@ -754,13 +1054,39 @@ app.put('/api/pool/mode', requireAdmin, (req, res) => {
   res.json({ success: true, mode, totalInPool: playlistCache.bar.length });
 });
 
+app.put('/api/pool/ratio', requireAdmin, (req, res) => {
+  const ratio = parseInt(req.body.ratio);
+  if (isNaN(ratio) || ratio < 0 || ratio > 100) {
+    return res.status(400).json({ error: 'ratio must be 0–100' });
+  }
+  artistDiscoveryRatio = ratio;
+  mergePool();
+  res.json({ success: true, artistDiscoveryRatio, totalInPool: playlistCache.bar.length });
+});
+
+app.get('/api/pool/moods', requireAdmin, (req, res) => {
+  res.json(AVAILABLE_MOODS.map(m => ({ ...m, active: activeMoodIds.has(m.id) })));
+});
+
+app.put('/api/pool/moods/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  const mood = AVAILABLE_MOODS.find(m => m.id === id);
+  if (!mood) return res.status(404).json({ error: 'Unknown mood' });
+  const { active } = req.body;
+  if (active) activeMoodIds.add(id);
+  else activeMoodIds.delete(id);
+  await buildCacheFromMoods();
+  mergePool();
+  res.json({ success: true, moodId: id, active, totalInPool: playlistCache.bar.length });
+});
+
 app.post('/api/pool/csv', requireAdmin, (req, res) => {
   const { name, csv } = req.body;
   if (!name || !csv) return res.status(400).json({ error: 'name and csv required' });
   if (csvPlaylists.find(p => p.name === name)) {
     return res.status(409).json({ error: 'A playlist with that name already exists — remove it first' });
   }
-  const tracks = parseExportifyCSV(csv);
+  const tracks = parseYouTubeCSV(csv);
   if (tracks.length === 0) return res.status(400).json({ error: 'No valid tracks found in CSV' });
   csvPlaylists.push({ name, addedAt: Date.now(), tracks });
   rebuildCsvSource();
@@ -769,20 +1095,54 @@ app.post('/api/pool/csv', requireAdmin, (req, res) => {
   res.json({ success: true, name, trackCount: tracks.length, totalInPool: playlistCache.bar.length });
 });
 
-// Browser fetches tracks via PKCE token, sends them here
-app.post('/api/pool/spotify-playlist/:playlistId', requireAdmin, (req, res) => {
-  const { name, tracks } = req.body;
+// Import a YouTube playlist by ID — server fetches track list via Data API
+app.post('/api/pool/youtube-playlist/:playlistId', requireAdmin, async (req, res) => {
+  const { playlistId } = req.params;
+  const { name } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
-  if (!Array.isArray(tracks) || tracks.length === 0) return res.status(400).json({ error: 'No tracks provided' });
+  if (!YOUTUBE_API_KEY || YOUTUBE_API_KEY === 'YOUR_YOUTUBE_API_KEY_HERE') {
+    return res.status(500).json({ error: 'YouTube API key not configured' });
+  }
   if (csvPlaylists.find(p => p.name === name)) {
     return res.status(409).json({ error: 'A playlist with that name already exists — remove it first' });
   }
-  csvPlaylists.push({ name, addedAt: Date.now(), tracks });
-  rebuildCsvSource();
-  mergePool();
-  console.log(`✓ Spotify playlist "${name}" imported: ${tracks.length} tracks`);
-  res.json({ success: true, name, trackCount: tracks.length, totalInPool: playlistCache.bar.length });
+  try {
+    const tracks = await fetchYouTubePlaylistTracks(playlistId);
+    if (tracks.length === 0) return res.status(400).json({ error: 'No tracks found in playlist' });
+    csvPlaylists.push({ name, addedAt: Date.now(), tracks });
+    rebuildCsvSource();
+    mergePool();
+    console.log(`✓ YouTube playlist "${name}" imported: ${tracks.length} tracks`);
+    res.json({ success: true, name, trackCount: tracks.length, totalInPool: playlistCache.bar.length });
+  } catch (err) {
+    console.error('YouTube playlist import error:', err.response?.data || err.message);
+    res.status(500).json({ error: 'Failed to import playlist' });
+  }
 });
+
+async function fetchYouTubePlaylistTracks(playlistId) {
+  const tracks = [];
+  let pageToken = undefined;
+  do {
+    const params = { part: 'snippet', playlistId, maxResults: 50, key: YOUTUBE_API_KEY };
+    if (pageToken) params.pageToken = pageToken;
+    const { data } = await axios.get(`${YT_API}/playlistItems`, { params });
+    const videoIds = (data.items || [])
+      .map(i => i.snippet?.resourceId?.videoId)
+      .filter(Boolean);
+    if (videoIds.length) {
+      const details = await ytVideoDetails(videoIds);
+      for (const item of details) {
+        if (!item.id) continue;
+        const track = mapVideoItemToTrack(item);
+        if (!isValidSongDuration(track.duration)) continue;
+        tracks.push(track);
+      }
+    }
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+  return tracks;
+}
 
 app.delete('/api/pool/csv/:name', requireAdmin, (req, res) => {
   const name = decodeURIComponent(req.params.name);
@@ -794,19 +1154,11 @@ app.delete('/api/pool/csv/:name', requireAdmin, (req, res) => {
   res.json({ success: true, totalInPool: playlistCache.bar.length });
 });
 
-app.put('/api/pool/settings', requireAdmin, (req, res) => {
-  const { minPopularity } = req.body;
-  if (typeof minPopularity !== 'number' || minPopularity < 0 || minPopularity > 100) {
-    return res.status(400).json({ error: 'minPopularity must be a number 0–100' });
-  }
-  poolSettings.minPopularity = minPopularity;
-  mergePool();
-  res.json({ success: true, settings: poolSettings, totalInPool: playlistCache.bar.length });
-});
 
 app.post('/api/pool/rebuild', requireAdmin, async (req, res) => {
   try {
-    await buildCacheFromSearch();
+    await buildCacheFromCharts();
+    await buildCacheFromMoods();
     await buildCacheFromArtists();
     mergePool();
     res.json({ success: true, totalInPool: playlistCache.bar.length });
@@ -816,38 +1168,37 @@ app.post('/api/pool/rebuild', requireAdmin, async (req, res) => {
   }
 });
 
-app.post('/api/pool/artists', requireAdmin, async (req, res) => {
-  const { name, artistId: explicitId } = req.body;
-  if (!name && !explicitId) return res.status(400).json({ error: 'name or artistId required' });
+// Search YouTube Music for artists by name — returns top 5 with thumbnail for the admin picker
+app.get('/api/search-artist', requireAdmin, async (req, res) => {
+  const { q } = req.query;
+  if (!q?.trim()) return res.status(400).json({ error: 'Query required' });
+  if (!ytmusicReady) return res.status(503).json({ error: 'YouTube Music not ready' });
   try {
-    const token = await getClientCredentialsToken();
-    if (!token) return res.status(500).json({ error: 'Could not authenticate with Spotify' });
+    const { data: artists } = await axios.get(`${YTMUSIC_SERVICE_URL}/search/artists`, {
+      params: { q: q.trim() },
+      timeout: 10000,
+    });
+    res.json(artists.slice(0, 5));
+  } catch (err) {
+    console.error('Artist search error:', err.message);
+    res.status(500).json({ error: 'Artist search failed' });
+  }
+});
 
-    let artistId = explicitId;
-    let artistName = name;
-
-    if (!artistId) {
-      // Search for artist by name
-      const { data } = await axios.get(
-        `https://api.spotify.com/v1/search?q=${encodeURIComponent(name)}&type=artist&limit=1`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      const found = data.artists?.items?.[0];
-      if (!found) return res.status(404).json({ error: 'Artist not found on Spotify' });
-      artistId = found.id;
-      artistName = found.name;
-    }
-
-    if (artistSeeds.find(s => s.artistId === artistId)) {
-      return res.status(409).json({ error: 'Artist already in seeds' });
-    }
-
-    artistSeeds.push({ artistId, artistName });
+app.post('/api/pool/artists', requireAdmin, async (req, res) => {
+  const { artistId, artistName, thumbnail, limit } = req.body;
+  if (!artistId || !artistName) return res.status(400).json({ error: 'artistId and artistName required' });
+  if (artistSeeds.find(s => s.channelId === artistId)) {
+    return res.status(409).json({ error: 'Artist already added' });
+  }
+  try {
+    const songLimit = Math.max(1, Math.min(100, parseInt(limit) || 20));
+    artistSeeds.push({ channelId: artistId, artistName, thumbnail: thumbnail || null, limit: songLimit });
     await buildCacheFromArtists();
     mergePool();
     res.json({ success: true, artistId, artistName, totalInPool: playlistCache.bar.length });
   } catch (err) {
-    console.error('Add artist seed error:', err.response?.data || err.message);
+    console.error('Add artist seed error:', err.message);
     res.status(500).json({ error: 'Failed to add artist' });
   }
 });
@@ -855,7 +1206,7 @@ app.post('/api/pool/artists', requireAdmin, async (req, res) => {
 app.delete('/api/pool/artists/:artistId', requireAdmin, async (req, res) => {
   const { artistId } = req.params;
   const before = artistSeeds.length;
-  artistSeeds = artistSeeds.filter(s => s.artistId !== artistId);
+  artistSeeds = artistSeeds.filter(s => s.channelId !== artistId && s.artistName !== decodeURIComponent(artistId));
   if (artistSeeds.length === before) return res.status(404).json({ error: 'Artist seed not found' });
   await buildCacheFromArtists();
   mergePool();
@@ -865,46 +1216,26 @@ app.delete('/api/pool/artists/:artistId', requireAdmin, async (req, res) => {
 app.post('/api/pool/tracks', requireAdmin, async (req, res) => {
   const { trackIds } = req.body;
   if (!Array.isArray(trackIds) || trackIds.length === 0) {
-    return res.status(400).json({ error: 'trackIds array required' });
+    return res.status(400).json({ error: 'trackIds (YouTube videoIds) array required' });
   }
-  // Parse spotify URIs or raw IDs
+  // Accept full YouTube URLs or raw 11-char video IDs
   const ids = trackIds.map(id => {
     if (typeof id !== 'string') return null;
-    if (id.startsWith('spotify:track:')) return id.split(':')[2];
-    if (id.startsWith('https://open.spotify.com/track/')) return id.split('/track/')[1].split('?')[0];
-    return id.trim();
+    const urlMatch = id.match(/(?:v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+    if (urlMatch) return urlMatch[1];
+    return id.trim().length >= 11 ? id.trim() : null;
   }).filter(Boolean);
 
-  if (ids.length === 0) return res.status(400).json({ error: 'No valid track IDs provided' });
-
+  if (ids.length === 0) return res.status(400).json({ error: 'No valid YouTube video IDs provided' });
+  if (!YOUTUBE_API_KEY || YOUTUBE_API_KEY === 'YOUR_YOUTUBE_API_KEY_HERE') {
+    return res.status(500).json({ error: 'YouTube API key not configured' });
+  }
   try {
-    const token = await getClientCredentialsToken();
-    if (!token) return res.status(500).json({ error: 'Could not authenticate with Spotify' });
-
-    // Fetch in batches of 50 (Spotify limit)
     const fetched = [];
     for (let i = 0; i < ids.length; i += 50) {
-      const batch = ids.slice(i, i + 50);
-      const { data } = await axios.get(
-        `https://api.spotify.com/v1/tracks?ids=${batch.join(',')}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      for (const t of data.tracks || []) {
-        if (!t?.id) continue;
-        if (BLOCK_EXPLICIT && t.explicit) continue;
-        fetched.push({
-          trackId: t.id,
-          title: t.name,
-          artist: t.artists.map(a => a.name).join(', '),
-          album: t.album.name,
-          albumArt: t.album.images[1]?.url || t.album.images[0]?.url || null,
-          explicit: t.explicit,
-          popularity: t.popularity ?? null,
-          uri: t.uri,
-        });
-      }
+      const details = await ytVideoDetails(ids.slice(i, i + 50));
+      fetched.push(...details.map(mapVideoItemToTrack));
     }
-
     let added = 0;
     for (const track of fetched) {
       if (!poolSources.pinned.find(t => t.trackId === track.trackId)) {
@@ -916,7 +1247,7 @@ app.post('/api/pool/tracks', requireAdmin, async (req, res) => {
     res.json({ success: true, added, totalInPool: playlistCache.bar.length });
   } catch (err) {
     console.error('Add pinned tracks error:', err.response?.data || err.message);
-    res.status(500).json({ error: 'Failed to fetch tracks from Spotify' });
+    res.status(500).json({ error: 'Failed to fetch tracks from YouTube' });
   }
 });
 
@@ -932,11 +1263,12 @@ app.delete('/api/pool/tracks/:trackId', requireAdmin, (req, res) => {
 app.delete('/api/pool/cache/:trackId', requireAdmin, (req, res) => {
   const { trackId } = req.params;
   const before = playlistCache.bar.length;
-  playlistCache.bar = playlistCache.bar.filter(t => t.trackId !== trackId);
-  // Also remove from all sources so rebuild doesn't re-add it
-  poolSources.genre  = poolSources.genre.filter(t => t.trackId !== trackId);
-  poolSources.artist = poolSources.artist.filter(t => t.trackId !== trackId);
-  poolSources.pinned = poolSources.pinned.filter(t => t.trackId !== trackId);
+  playlistCache.bar     = playlistCache.bar.filter(t => t.trackId !== trackId);
+  poolSources.genre     = poolSources.genre.filter(t => t.trackId !== trackId);
+  poolSources.charts    = poolSources.charts.filter(t => t.trackId !== trackId);
+  poolSources.moods     = poolSources.moods.filter(t => t.trackId !== trackId);
+  poolSources.artist    = poolSources.artist.filter(t => t.trackId !== trackId);
+  poolSources.pinned    = poolSources.pinned.filter(t => t.trackId !== trackId);
   if (playlistCache.bar.length === before) return res.status(404).json({ error: 'Track not in pool' });
   res.json({ success: true, totalInPool: playlistCache.bar.length });
 });
@@ -962,6 +1294,7 @@ app.post('/api/queue', (req, res) => {
   };
   queue.push(item);
   sortQueue();
+  resolveQueueAudio(2).catch(() => {}); // resolve top 2 while current song plays
   broadcast();
   res.json({ success: true, item: { ...item, voters: Array.from(item.voters) } });
 });
@@ -970,11 +1303,9 @@ app.post('/api/queue', (req, res) => {
 app.post('/api/vote/:id', (req, res) => {
   const item = queue.find(i => i.id === req.params.id);
   if (!item) return res.status(404).json({ error: 'Not found' });
-
   const { voterId } = req.body;
   if (!voterId) return res.status(400).json({ error: 'voterId required' });
   if (item.voters.has(voterId)) return res.status(409).json({ error: 'Already voted' });
-
   item.voters.add(voterId);
   item.votes++;
   sortQueue();
@@ -993,14 +1324,13 @@ app.delete('/api/queue/:id', requireAdmin, async (req, res) => {
 });
 
 // ─── Admin: Skip ──────────────────────────────────────────────────────────────
-// ─── Admin: Skip ──────────────────────────────────────────────────────────────
 app.post('/api/skip', requireAdmin, async (req, res) => {
   try {
     lastTrackChange = 0;
     const track = await advanceToNextTrack();
     res.json({ success: true, track });
   } catch (err) {
-    console.error('Skip error:', err.response?.data || err.message);
+    console.error('Skip error:', err.message);
     res.status(500).json({ error: 'Failed to skip track' });
   }
 });
@@ -1019,90 +1349,15 @@ app.post('/api/auth/verify', requireAdmin, (req, res) => {
   res.json({ success: true });
 });
 
-// ─── Host: Get current playback state ─────────────────────────────────────────
-app.get('/api/playback', async (req, res) => {
-  try {
-    const token = await getToken();
-    if (!token) return res.status(401).json({ error: 'Not authenticated' });
-    
-    const { data } = await axios.get('https://api.spotify.com/v1/me/player', {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    
-    if (!data) return res.json({ isPlaying: false, position: 0, duration: 0 });
-    
-    res.json({
-      isPlaying: data.is_playing,
-      position: data.progress_ms,
-      duration: data.item?.duration_ms || 0,
-      trackName: data.item?.name,
-      trackId: data.item?.id,
-    });
-  } catch (err) {
-    console.error('Playback state error:', err.response?.data || err.message);
-    res.status(500).json({ error: 'Failed to get playback state' });
-  }
-});
-
-// ─── Host: Control playback (play/pause) ──────────────────────────────────────
-app.post('/api/playback/:action', async (req, res) => {
-  const { action } = req.params;
-  if (!['play', 'pause'].includes(action)) {
-    return res.status(400).json({ error: 'Invalid action' });
-  }
-  
-  let token = null;
-  try {
-    token = await getToken();
-    if (!token) return res.status(401).json({ error: 'Not authenticated' });
-    
-    // Build URL with device_id if available
-    let url = `https://api.spotify.com/v1/me/player/${action}`;
-    if (deviceId) {
-      url += `?device_id=${deviceId}`;
-    }
-    
-    await axios.put(
-      url,
-      {},
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    
-    res.json({ success: true });
-  } catch (err) {
-    const errorMsg = err.response?.data?.error?.message || err.message;
-    console.error(`Playback ${action} error:`, errorMsg);
-    
-    // If no active device, try to transfer playback to our device first
-    if (errorMsg.includes('No active device') && deviceId) {
-      try {
-        await axios.put(
-          'https://api.spotify.com/v1/me/player',
-          { device_ids: [deviceId], play: action === 'play' },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        res.json({ success: true, note: 'Transferred to jukebox device' });
-        return;
-      } catch (transferErr) {
-        console.error('Device transfer error:', transferErr.response?.data || transferErr.message);
-      }
-    }
-    
-    res.status(500).json({ error: errorMsg || 'Failed to control playback' });
-  }
-});
-
-// ─── Host: Register Device ────────────────────────────────────────────────────
+// ─── Host: Register ───────────────────────────────────────────────────────────
 app.post('/api/device', (req, res) => {
   const { hostId } = req.body;
   if (!hostId) return res.status(400).json({ error: 'hostId required' });
   if (activeHost.hostId && activeHost.hostId !== hostId) {
     return res.status(409).json({ error: 'Another host session is active' });
   }
-
   activeHost.hostId = hostId;
-  deviceId = req.body.deviceId;
-  console.log('Host device registered:', deviceId);
+  console.log('Host registered:', hostId);
   res.json({ success: true });
 });
 
@@ -1114,13 +1369,11 @@ app.post('/api/host/ack', async (req, res) => {
     const queuedTrack = queue.find(item => item.trackId === trackId);
     if (queuedTrack) {
       currentTrack = queuedTrack;
-      targetTrack = queuedTrack;
+      targetTrack  = queuedTrack;
       queue = queue.filter(item => item.trackId !== trackId);
-      // Mark as played so the pool doesn't re-select it immediately after
-      // (natural advance path bypasses advanceToNextTrack, so markTrackAsPlayed
-      // would otherwise never be called for this track)
       markTrackAsPlayed(trackId);
       await ensureQueueHasUpcomingTrack();
+      resolveQueueAudio(2).catch(() => {}); // pre-warm next tracks while this one plays
       broadcast();
       return res.json({ success: true, advanced: true });
     }
@@ -1139,68 +1392,23 @@ app.post('/api/host/ack', async (req, res) => {
       currentTrack = {
         id: `ack_${uuidv4()}`,
         trackId,
-        title: req.body.title || 'Unknown track',
-        artist: req.body.artist || '',
-        album: req.body.album || '',
+        title:    req.body.title    || 'Unknown track',
+        artist:   req.body.artist   || '',
+        album:    req.body.album    || '',
         albumArt: req.body.albumArt || null,
         explicit: false,
-        votes: 0,
-        voters: new Set(),
-        addedAt: Date.now(),
+        votes:    0,
+        voters:   new Set(),
+        addedAt:  Date.now(),
         isFallback: false,
       };
     }
-    if (adoptTarget || !targetTrack) {
-      targetTrack = currentTrack;
-    }
+    if (adoptTarget || !targetTrack) targetTrack = currentTrack;
   }
 
   broadcast();
   res.json({ success: true });
 });
-
-// ─── Background sync: Verify server state matches Spotify reality ─────────────
-let lastServerCorrection = 0;
-
-setInterval(async () => {
-  // Don't correct more than once every 30 seconds (cooldown)
-  if (Date.now() - lastServerCorrection < 30000) return;
-  if (!targetTrack || !spotifyTokens.accessToken) return;
-  
-  try {
-    const token = await getToken();
-    if (!token) return;
-    
-    // Check what Spotify is actually playing
-    const { data } = await axios.get('https://api.spotify.com/v1/me/player', {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    
-    if (!data || !data.item) return;
-    
-    const actualTrackId = data.item.id;
-    const serverTrackId = targetTrack.trackId;
-    
-    // Only correct if Spotify has been playing something different for a while
-    // AND it's not paused/stopped
-    if (actualTrackId !== serverTrackId && data.is_playing) {
-      
-      // Check if it's a user-requested song (in queue)
-      const queueTrack = queue.find(t => t.trackId === actualTrackId);
-      if (queueTrack) {
-        console.log('-> Found in queue, updating current track only');
-        currentTrack = queueTrack;
-        queue = queue.filter(t => t.id !== queueTrack.id);
-        await ensureQueueHasUpcomingTrack();
-        broadcast();
-        lastServerCorrection = Date.now();
-      }
-      // Don't auto-correct for unknown tracks - let the host handle it
-    }
-  } catch (err) {
-    // Silent fail
-  }
-}, 10000); // Check every 10 seconds
 
 // ─── Host: Request Next Track ─────────────────────────────────────────────────
 app.post('/api/next', async (req, res) => {
@@ -1208,7 +1416,7 @@ app.post('/api/next', async (req, res) => {
     const track = await advanceToNextTrack();
     res.json({ track });
   } catch (err) {
-    console.error('Next error:', err.response?.data || err.message);
+    console.error('Next error:', err.message);
     res.status(500).json({ error: 'Failed to get next track' });
   }
 });
@@ -1224,24 +1432,20 @@ io.on('connection', socket => {
       socket.emit('hostRejected', { reason: 'Missing host ID' });
       return;
     }
-
     const noActiveHost = !activeHost.socketId || !activeHost.hostId;
-    const sameHost = activeHost.hostId === hostId;
-    const sameSocket = activeHost.socketId === socket.id;
-
+    const sameHost     = activeHost.hostId   === hostId;
+    const sameSocket   = activeHost.socketId === socket.id;
     if (noActiveHost || sameHost || sameSocket) {
       activeHost = { socketId: socket.id, hostId };
       socket.emit('hostAccepted', { hostId });
       return;
     }
-
     socket.emit('hostRejected', { reason: 'Another host page is already active' });
   });
 
   socket.on('disconnect', () => {
     if (activeHost.socketId === socket.id) {
-      activeHost = { socketId: null, hostId: null };
-      deviceId = null;
+      activeHost  = { socketId: null, hostId: null };
       targetTrack = null;
       console.log('Host session released');
     }
@@ -1250,7 +1454,12 @@ io.on('connection', socket => {
 
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
-server.listen(PORT, HOST, () => {
+server.listen(PORT, HOST, async () => {
   console.log(`🎵 Jukebox server running → http://${HOST}:${PORT}`);
-  buildCacheFromSearch().catch(err => console.warn('Startup cache build failed:', err.message));
+  await startYTMusicService();
+  rebuildPool().catch(err => console.warn('Startup pool build failed:', err.message));
 });
+
+// Graceful shutdown — kill the Python child process so it doesn't linger
+process.on('SIGINT',  () => { ytmusicProcess?.kill(); process.exit(0); });
+process.on('SIGTERM', () => { ytmusicProcess?.kill(); process.exit(0); });

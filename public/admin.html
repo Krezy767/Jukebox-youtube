@@ -11,7 +11,7 @@
     --bg: #0a0a0a;
     --surface: #161616;
     --surface2: #1f1f1f;
-    --accent: #1db954;
+    --accent: #ff0000;
     --red: #e84040;
     --orange: #f59e0b;
     --text: #fff;
@@ -53,7 +53,7 @@
     transition: all 0.15s;
   }
   .nav-item:hover { background: var(--surface2); color: var(--text); }
-  .nav-item.active { background: #1a2e1d; color: var(--accent); }
+  .nav-item.active { background: #2e1a1a; color: var(--accent); }
   .sidebar-divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
 
   /* Status badge */
@@ -100,8 +100,8 @@
 
   /* Now playing */
   .now-playing-card {
-    background: linear-gradient(135deg, #1a2e1d, #111a12);
-    border: 1px solid #2d4a31;
+    background: linear-gradient(135deg, #2e1a1a, #111212);
+    border: 1px solid #4a2d2d;
     border-radius: 16px;
     padding: 20px;
     display: flex;
@@ -219,7 +219,7 @@
   .mode-selector { display: flex; gap: 8px; margin-bottom: 24px; }
   .mode-btn { padding: 10px 20px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.15s; }
   .mode-btn:hover { background: var(--surface2); color: var(--text); }
-  .mode-btn.active { background: #1a2e1d; color: var(--accent); border-color: var(--accent); }
+  .mode-btn.active { background: #2e1a1a; color: var(--accent); border-color: var(--accent); }
   .pool-section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
   .pool-section-label.playlist-label { color: var(--accent); }
   .pool-section-label.discovery-label { color: #8b8bff; }
@@ -240,15 +240,16 @@
   .pool-section h3 { font-size: 14px; font-weight: 600; margin-bottom: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; }
   .pool-input-row { display: flex; gap: 8px; }
   .pool-input-row .input { margin-bottom: 0; flex: 1; }
+  .mood-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .mood-btn { display: flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 20px; background: var(--surface2); border: 1.5px solid var(--border); color: var(--text); cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.15s; user-select: none; }
+  .mood-btn:hover { border-color: var(--accent); }
+  .mood-btn.active { background: var(--accent); border-color: var(--accent); color: #000; }
   .seed-list { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
   .seed-item { display: flex; align-items: center; justify-content: space-between; background: var(--surface2); padding: 10px 12px; border-radius: 10px; font-size: 14px; }
   .seed-item .source-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
   .badge-artist { background: rgba(29,185,84,0.15); color: var(--accent); }
   .badge-genre  { background: rgba(100,100,255,0.15); color: #8b8bff; }
   .badge-pinned { background: rgba(245,158,11,0.15); color: var(--orange); }
-  .popularity-row { display: flex; align-items: center; gap: 14px; }
-  .popularity-row input[type=range] { flex: 1; accent-color: var(--accent); }
-  .popularity-value { font-size: 20px; font-weight: 700; color: var(--accent); width: 36px; text-align: right; }
   .pool-track-list { max-height: 420px; overflow-y: auto; margin-top: 12px; }
   .pool-track-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; transition: background 0.1s; }
   .pool-track-item:hover { background: var(--surface2); }
@@ -256,7 +257,6 @@
   .pool-track-info { flex: 1; min-width: 0; }
   .pool-track-info .name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .pool-track-info .artist { font-size: 11px; color: var(--muted); }
-  .pool-pop { font-size: 12px; color: var(--muted); width: 32px; text-align: right; flex-shrink: 0; }
   .pool-header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
   .pool-header-row h2 { margin-bottom: 0; }
   .textarea {
@@ -440,23 +440,22 @@
       <!-- Playlist Pool -->
       <div class="pool-section" id="playlistPoolSection">
         <div class="pool-section-label playlist-label">Playlist Pool</div>
-        <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Import directly from your Spotify account, or upload a CSV exported from Exportify.</p>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Import a YouTube playlist by URL or ID, or upload a CSV (videoId, title, artist, album, albumArt — one row per track).</p>
 
-        <!-- Spotify connect status -->
-        <div id="spotifyConnectBar" style="margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <span id="spotifyConnectStatus" style="font-size:13px;color:var(--muted)">Checking Spotify connection…</span>
-          <button class="btn btn-ghost" id="spotifyConnectBtn" onclick="connectSpotify()" style="display:none">Connect Spotify</button>
+        <!-- YouTube playlist import -->
+        <div style="margin-bottom:14px">
+          <div style="font-size:13px;font-weight:600;margin-bottom:8px">Import YouTube Playlist</div>
+          <div class="pool-input-row">
+            <input class="input" id="ytPlaylistInput" placeholder="YouTube playlist URL or ID (e.g. PLxxxxxx)">
+            <input class="input" id="ytPlaylistName" placeholder="Name" style="max-width:160px">
+            <button class="btn btn-primary" onclick="importYouTubePlaylist()">Import</button>
+          </div>
+          <div id="ytImportStatus" style="font-size:12px;color:var(--muted);margin-top:6px"></div>
         </div>
 
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-primary" onclick="browseSpotifyPlaylists()" id="browseSpotifyBtn" disabled>Browse Spotify Playlists</button>
           <input type="file" id="csvFileInput" accept=".csv" style="display:none" onchange="handleCSVUpload(event)">
           <button class="btn btn-ghost" onclick="document.getElementById('csvFileInput').click()">Upload CSV</button>
-        </div>
-
-        <!-- Spotify playlist browser -->
-        <div class="spotify-playlist-browser" id="spotifyPlaylistBrowser" style="display:none">
-          <div id="spotifyPlaylistList"></div>
         </div>
 
         <!-- Imported playlists -->
@@ -467,35 +466,42 @@
       <div class="pool-section" id="discoveryPoolSection">
         <div class="pool-section-label discovery-label">Discovery Pool</div>
 
-        <!-- Popularity Floor -->
-        <div style="margin-bottom:20px">
-          <div style="font-size:13px;font-weight:600;margin-bottom:8px">Popularity Floor</div>
-          <p style="font-size:12px;color:var(--muted);margin-bottom:12px">Genre and artist tracks below this score are excluded. Pinned tracks always pass.</p>
-          <div class="popularity-row">
-            <span style="font-size:13px;color:var(--muted)">0</span>
-            <input type="range" min="0" max="100" step="1" id="popularitySlider" oninput="updatePopularityLabel(this.value)">
-            <span style="font-size:13px;color:var(--muted)">100</span>
-            <span class="popularity-value" id="popularityLabel">—</span>
-            <button class="btn btn-primary" onclick="savePopularity()">Apply</button>
+        <!-- Artist / Discovery blend slider -->
+        <div style="margin-bottom:24px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-size:13px;font-weight:600">Blend</span>
+            <span id="ratioLabel" style="font-size:12px;color:var(--muted)">50% Artists · 50% Discovery</span>
           </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:11px;color:var(--muted);white-space:nowrap">All Discovery</span>
+            <input type="range" id="ratioSlider" min="0" max="100" value="50" style="flex:1;accent-color:var(--accent)" oninput="updateRatioLabel(this.value)" onchange="saveRatio(this.value)">
+            <span style="font-size:11px;color:var(--muted);white-space:nowrap">All Artists</span>
+          </div>
+        </div>
+
+        <!-- Moods & Genres -->
+        <div style="margin-bottom:24px">
+          <div style="font-size:13px;font-weight:600;margin-bottom:4px">Moods & Genres</div>
+          <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Pick the vibe — each pulls from a curated YouTube Music playlist. Changes take effect immediately.</p>
+          <div class="mood-grid" id="moodGrid"></div>
         </div>
 
         <!-- Artist Seeds -->
         <div style="margin-bottom:20px">
           <div style="font-size:13px;font-weight:600;margin-bottom:8px">Artist Seeds</div>
-          <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Add artists by name — fetches their tracks via Spotify search.</p>
+          <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Search for an artist and pick from results — pulls their songs directly from YouTube Music.</p>
           <div class="pool-input-row">
-            <input class="input" id="artistInput" placeholder="Artist name (e.g. The Weeknd)" onkeydown="if(event.key==='Enter')addArtist()">
-            <button class="btn btn-primary" onclick="addArtist()">Add</button>
+            <input class="input" id="artistInput" placeholder="Search artist (e.g. The Weeknd)" oninput="searchArtists()" onkeydown="if(event.key==='Escape')clearArtistResults()">
           </div>
+          <div id="artistSearchResults" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:10px;margin-top:6px;overflow:hidden"></div>
           <div class="seed-list" id="artistSeedList"></div>
         </div>
 
         <!-- Pinned Tracks -->
         <div>
           <div style="font-size:13px;font-weight:600;margin-bottom:8px">Pinned Tracks</div>
-          <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Paste Spotify track IDs, URIs, or share URLs — one per line. Always included.</p>
-          <textarea class="textarea" id="pinnedInput" placeholder="0VjIjW4GlUZAMYd2vXMi3b&#10;spotify:track:7qiZfU4dY1lWllzX7mPBI3&#10;https://open.spotify.com/track/4LRPiXqCikLlN15c3yImP7"></textarea>
+          <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Paste YouTube video URLs or video IDs — one per line. Always included.</p>
+          <textarea class="textarea" id="pinnedInput" placeholder="dQw4w9WgXcQ&#10;https://www.youtube.com/watch?v=dQw4w9WgXcQ&#10;https://youtu.be/dQw4w9WgXcQ"></textarea>
           <div style="margin-top:10px"><button class="btn btn-primary" onclick="addPinnedTracks()">Add Tracks</button></div>
           <div class="seed-list" id="pinnedTrackList"></div>
         </div>
@@ -525,7 +531,7 @@
         <div class="setting-row">
           <div>
             <div class="setting-label">Host player</div>
-            <div class="setting-desc">Open the Spotify player page (keep open on your bar device)</div>
+            <div class="setting-desc">Open the YouTube player page (keep open on your bar device)</div>
           </div>
           <a href="/host.html" target="_blank"><button class="btn btn-primary">Open Host Player</button></a>
         </div>
@@ -764,7 +770,37 @@
       poolData = await res.json();
       renderPool(poolData);
     } catch (e) { /* silent */ }
-    checkSpotifyConnection();
+  }
+
+  async function toggleMood(id) {
+    const btn = document.querySelector(`.mood-btn[data-mood-id="${id}"]`);
+    const nowActive = !btn.classList.contains('active');
+    btn.classList.toggle('active', nowActive);
+    btn.style.pointerEvents = 'none';
+    await fetch(`/api/pool/moods/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+      body: JSON.stringify({ active: nowActive })
+    });
+    btn.style.pointerEvents = '';
+    await loadPool();
+  }
+
+  function updateRatioLabel(value) {
+    const v = parseInt(value);
+    const label = document.getElementById('ratioLabel');
+    if (v === 0)        label.textContent = '100% Discovery';
+    else if (v === 100) label.textContent = '100% Artists';
+    else                label.textContent = `${v}% Artists · ${100 - v}% Discovery`;
+  }
+
+  async function saveRatio(value) {
+    await fetch('/api/pool/ratio', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+      body: JSON.stringify({ ratio: parseInt(value) })
+    });
+    await loadPool();
   }
 
   function renderPool(data) {
@@ -777,16 +813,48 @@
     document.getElementById('playlistPoolSection').classList.toggle('dimmed', data.mode === 'discovery');
     document.getElementById('discoveryPoolSection').classList.toggle('dimmed', data.mode === 'playlist');
 
+    // Blend slider
+    if (data.artistDiscoveryRatio !== undefined) {
+      const slider = document.getElementById('ratioSlider');
+      slider.value = data.artistDiscoveryRatio;
+      updateRatioLabel(data.artistDiscoveryRatio);
+    }
+
+    // Mood grid
+    const activeMoods = new Set(data.activeMoodIds || []);
+    const MOODS = [
+      { id: 'party',     name: 'Party',      emoji: '🎉' },
+      { id: 'chill',     name: 'Chill',      emoji: '😌' },
+      { id: 'feelgood',  name: 'Feel Good',  emoji: '😊' },
+      { id: 'workout',   name: 'Workout',    emoji: '💪' },
+      { id: 'hiphop',    name: 'Hip-Hop',    emoji: '🎤' },
+      { id: 'rnb',       name: 'R&B',        emoji: '❤️' },
+      { id: 'pop',       name: 'Pop',        emoji: '⭐' },
+      { id: 'rock',      name: 'Rock',       emoji: '🎸' },
+      { id: 'dance',     name: 'Dance',      emoji: '🕺' },
+      { id: 'throwback', name: 'Throwback',  emoji: '⏮️' },
+      { id: 'summer',    name: 'Summer',     emoji: '☀️' },
+      { id: 'romance',   name: 'Romance',    emoji: '💕' },
+      { id: 'latin',     name: 'Latin',      emoji: '🌶️' },
+      { id: 'focus',     name: 'Focus',      emoji: '🎯' },
+      { id: 'jazz',      name: 'Jazz',       emoji: '🎷' },
+      { id: 'house',        name: 'Deep House',    emoji: '🎛️' },
+      { id: 'organichouse', name: 'Organic House', emoji: '🌅' },
+      { id: 'afrohouse',    name: 'Afro House',    emoji: '🥁' },
+      { id: 'jackinhouse',   name: 'Jackin\' House',  emoji: '📼' },
+      { id: 'croatiantrash', name: 'Croatian Trash', emoji: '🇭🇷' },
+    ];
+    document.getElementById('moodGrid').innerHTML = MOODS.map(m => `
+      <button class="mood-btn${activeMoods.has(m.id) ? ' active' : ''}" data-mood-id="${m.id}" onclick="toggleMood('${m.id}')">
+        <span>${m.emoji}</span><span>${m.name}</span>
+      </button>`).join('');
+
     // Stats
     const discoveryTotal = (data.sources.genre.passing || 0) + (data.sources.artist.passing || 0) + (data.sources.pinned.total || 0);
     document.getElementById('poolTotal').textContent          = data.totalInPool;
     document.getElementById('poolCsvCount').textContent       = data.sources.csv.passing ?? data.sources.csv.total ?? 0;
     document.getElementById('poolDiscoveryCount').textContent = discoveryTotal;
     document.getElementById('poolPlaylistsCount').textContent = data.csvPlaylists.length;
-
-    // Popularity slider
-    document.getElementById('popularitySlider').value = data.settings.minPopularity;
-    document.getElementById('popularityLabel').textContent = data.settings.minPopularity;
 
     // CSV playlists
     const csvList = document.getElementById('csvPlaylistList');
@@ -810,8 +878,14 @@
     } else {
       seedList.innerHTML = data.artistSeeds.map(s => `
         <div class="seed-item">
-          <span>${esc(s.artistName)}</span>
-          <button class="btn btn-danger" style="padding:5px 12px;font-size:12px" onclick="removeArtist('${esc(s.artistId)}')">Remove</button>
+          <div style="display:flex;align-items:center;gap:10px">
+            ${s.thumbnail ? `<img src="${esc(s.thumbnail)}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;background:#333;flex-shrink:0">` : ''}
+            <div>
+              <div style="font-weight:600">${esc(s.artistName)}</div>
+              <div style="font-size:11px;color:var(--muted)">max ${s.limit || 20} songs</div>
+            </div>
+          </div>
+          <button class="btn btn-danger" style="padding:5px 12px;font-size:12px" onclick="removeArtist('${esc(s.channelId || s.artistName)}')">Remove</button>
         </div>`).join('');
     }
 
@@ -848,7 +922,6 @@
             <div class="artist">${esc(t.artist)}</div>
           </div>
           <span class="source-badge ${sourceBadgeClass(t.source)}">${t.source}</span>
-          <span class="pool-pop">${t.popularity ?? '—'}</span>
           <button class="remove-btn" onclick="removeFromPool('${esc(t.trackId)}')">✕</button>
         </div>`).join('');
     }
@@ -889,236 +962,42 @@
     }
   }
 
-  // ── PKCE Spotify Auth (browser-side, like Exportify) ────────────────────────
-  let spotifyPlaylists = [];
-  let pkceToken = null;
-  let pkceExpires = 0;
+  // ── YouTube Playlist Import ──────────────────────────────────────────────────
+  async function importYouTubePlaylist() {
+    const raw  = document.getElementById('ytPlaylistInput').value.trim();
+    const name = document.getElementById('ytPlaylistName').value.trim();
+    const statusEl = document.getElementById('ytImportStatus');
 
-  function getPkceToken() {
-    const t = sessionStorage.getItem('sp_admin_token');
-    const e = parseInt(sessionStorage.getItem('sp_admin_expires') || '0');
-    if (t && Date.now() < e - 60_000) return t;
-    sessionStorage.removeItem('sp_admin_token');
-    sessionStorage.removeItem('sp_admin_expires');
-    return null;
-  }
+    if (!raw)  { statusEl.textContent = 'Enter a playlist URL or ID'; return; }
+    if (!name) { statusEl.textContent = 'Enter a name for this playlist'; return; }
 
-  function generateCodeVerifier() {
-    const arr = new Uint8Array(64);
-    crypto.getRandomValues(arr);
-    return btoa(String.fromCharCode(...arr)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-  }
+    // Extract playlist ID from URL or use as-is
+    let playlistId = raw;
+    const urlMatch = raw.match(/[?&]list=([A-Za-z0-9_-]+)/);
+    if (urlMatch) playlistId = urlMatch[1];
 
-  async function generateCodeChallenge(verifier) {
-    const data = new TextEncoder().encode(verifier);
-    const digest = await crypto.subtle.digest('SHA-256', data);
-    return btoa(String.fromCharCode(...new Uint8Array(digest))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-  }
-
-  async function connectSpotify() {
-    const { clientId, redirectUri } = await fetch('/api/config').then(r => r.json());
-    const verifier = generateCodeVerifier();
-    const challenge = await generateCodeChallenge(verifier);
-    sessionStorage.setItem('sp_pkce_verifier', verifier);
-    const params = new URLSearchParams({
-      response_type: 'code',
-      client_id: clientId,
-      scope: 'playlist-read-private playlist-read-collaborative',
-      redirect_uri: redirectUri,
-      state: 'pkce',
-      code_challenge: challenge,
-      code_challenge_method: 'S256',
-    });
-    window.location.href = 'https://accounts.spotify.com/authorize?' + params.toString();
-  }
-
-  async function exchangePkceCode(code) {
-    const verifier = sessionStorage.getItem('sp_pkce_verifier');
-    if (!verifier) return;
-    sessionStorage.removeItem('sp_pkce_verifier');
-    const { clientId, redirectUri } = await fetch('/api/config').then(r => r.json());
-    const res = await fetch('https://accounts.spotify.com/api/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: redirectUri, client_id: clientId, code_verifier: verifier }).toString(),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      sessionStorage.setItem('sp_admin_token', data.access_token);
-      sessionStorage.setItem('sp_admin_expires', Date.now() + data.expires_in * 1000);
-    } else {
-      console.error('PKCE exchange failed', await res.json());
-    }
-  }
-
-  function checkSpotifyConnection() {
-    const token = getPkceToken();
-    const statusEl  = document.getElementById('spotifyConnectStatus');
-    const connectBtn = document.getElementById('spotifyConnectBtn');
-    const browseBtn  = document.getElementById('browseSpotifyBtn');
-    if (token) {
-      statusEl.textContent = '✓ Spotify connected';
-      statusEl.style.color = 'var(--green)';
-      connectBtn.style.display = 'none';
-      browseBtn.disabled = false;
-    } else {
-      statusEl.textContent = 'Not connected to Spotify';
-      statusEl.style.color = 'var(--muted)';
-      connectBtn.style.display = '';
-      browseBtn.disabled = true;
-    }
-  }
-
-  // Handle redirect back from Spotify (code in URL) or error
-  (async function handleSpotifyRedirect() {
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get('code');
-    const err  = params.get('spotify');
-    if (code && sessionStorage.getItem('sp_pkce_verifier')) {
-      history.replaceState({}, '', window.location.pathname);
-      await exchangePkceCode(code);
-    } else if (err === 'error') {
-      alert('Spotify connection failed — please try again');
-      history.replaceState({}, '', window.location.pathname);
-    }
-  })();
-
-  async function browseSpotifyPlaylists() {
-    const btn = document.getElementById('browseSpotifyBtn');
-    const browser = document.getElementById('spotifyPlaylistBrowser');
-    const list = document.getElementById('spotifyPlaylistList');
-
-    if (browser.style.display !== 'none') {
-      browser.style.display = 'none';
-      btn.textContent = 'Browse Spotify Playlists';
-      return;
-    }
-
-    const token = getPkceToken();
-    if (!token) { checkSpotifyConnection(); return; }
-
-    btn.textContent = 'Loading…';
-    btn.disabled = true;
-    list.innerHTML = '<div style="font-size:13px;color:var(--muted);padding:12px 0">Fetching your playlists…</div>';
-    browser.style.display = 'block';
-
+    statusEl.textContent = 'Importing…';
     try {
-      // Fetch all pages directly from Spotify
-      const playlists = [];
-      let url = 'https://api.spotify.com/v1/me/playlists?limit=50';
-      while (url) {
-        const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-        if (!res.ok) throw new Error(`Spotify ${res.status}`);
-        const data = await res.json();
-        playlists.push(...(data.items || []).filter(Boolean));
-        url = data.next || null;
-      }
-      spotifyPlaylists = playlists.map(p => ({
-        id: p.id,
-        name: p.name,
-        trackCount: p.tracks?.total || 0,
-        imageUrl: p.images?.[0]?.url || null,
-        owner: p.owner?.display_name || p.owner?.id || '',
-        public: p.public,
-      }));
-      renderSpotifyPlaylistBrowser();
-      btn.textContent = 'Hide Playlists';
-    } catch (e) {
-      list.innerHTML = `<div style="font-size:13px;color:var(--red);padding:8px 0">Error: ${esc(e.message)}</div>`;
-      btn.textContent = 'Browse Spotify Playlists';
-    }
-    btn.disabled = false;
-  }
-
-  function renderSpotifyPlaylistBrowser() {
-    const list = document.getElementById('spotifyPlaylistList');
-    const importedNames = new Set((poolData?.csvPlaylists || []).map(p => p.name));
-    if (spotifyPlaylists.length === 0) {
-      list.innerHTML = '<div style="font-size:13px;color:var(--muted);padding:8px 0">No playlists found</div>';
-      return;
-    }
-    list.innerHTML = spotifyPlaylists.map(p => {
-      const alreadyImported = importedNames.has(p.name);
-      return `
-        <div class="spotify-playlist-item">
-          <img src="${esc(p.imageUrl || '')}" alt="">
-          <div class="sp-info">
-            <div class="sp-name">${esc(p.name)}</div>
-            <div class="sp-meta">${p.trackCount} tracks · ${esc(p.owner)}${p.public === false ? ' · private' : ''}</div>
-          </div>
-          ${alreadyImported
-            ? `<span class="sp-imported">✓ Imported</span>`
-            : `<button class="btn btn-primary" style="padding:6px 14px;font-size:12px;flex-shrink:0"
-                onclick="importSpotifyPlaylist('${esc(p.id)}', '${esc(p.name)}', this)">Import</button>`
-          }
-        </div>`;
-    }).join('');
-  }
-
-  async function importSpotifyPlaylist(playlistId, name, btn) {
-    btn.textContent = 'Importing…';
-    btn.disabled = true;
-    const token = getPkceToken();
-    if (!token) { btn.textContent = 'Import'; btn.disabled = false; checkSpotifyConnection(); return; }
-
-    try {
-      // Fetch first page to get total
-      const first = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&offset=0`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!first.ok) throw new Error(`Spotify ${first.status}: ${(await first.json())?.error?.message || ''}`);
-      const firstData = await first.json();
-      const total = firstData.total || 0;
-      let items = [...(firstData.items || [])];
-
-      // Fetch remaining pages concurrently
-      if (total > 100) {
-        const offsets = [];
-        for (let i = 100; i < total; i += 100) offsets.push(i);
-        const pages = await Promise.all(offsets.map(offset =>
-          fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&offset=${offset}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }).then(r => r.json()).then(d => d.items || [])
-        ));
-        for (const page of pages) items.push(...page);
-      }
-
-      // Map to our track format
-      const tracks = items
-        .filter(item => item?.track?.id)
-        .map(item => {
-          const t = item.track;
-          return {
-            trackId:    t.id,
-            title:      t.name,
-            artist:     t.artists.map(a => a.name).join(', '),
-            album:      t.album.name,
-            albumArt:   t.album.images?.[1]?.url || t.album.images?.[0]?.url || null,
-            explicit:   t.explicit,
-            popularity: typeof t.popularity === 'number' ? t.popularity : null,
-            uri:        t.uri,
-          };
-        });
-
-      if (tracks.length === 0) throw new Error('No playable tracks found in this playlist');
-
-      // Send to server
-      const res = await fetch(`/api/pool/spotify-playlist/${encodeURIComponent(playlistId)}`, {
+      const res = await fetch(`/api/pool/youtube-playlist/${encodeURIComponent(playlistId)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
-        body: JSON.stringify({ name, tracks }),
+        body: JSON.stringify({ name }),
       });
       if (res.ok) {
+        const data = await res.json();
+        statusEl.textContent = `✓ Imported ${data.trackCount} tracks`;
+        statusEl.style.color = 'var(--accent)';
+        document.getElementById('ytPlaylistInput').value = '';
+        document.getElementById('ytPlaylistName').value = '';
         await loadPool();
-        renderSpotifyPlaylistBrowser();
       } else {
         const { error } = await res.json();
-        throw new Error(error || 'Server rejected the import');
+        statusEl.textContent = error || 'Import failed';
+        statusEl.style.color = 'var(--red)';
       }
     } catch (e) {
-      btn.textContent = 'Import';
-      btn.disabled = false;
-      alert(e.message || 'Failed to import playlist');
+      statusEl.textContent = 'Connection error';
+      statusEl.style.color = 'var(--red)';
     }
   }
 
@@ -1130,36 +1009,71 @@
     if (res.ok) await loadPool();
   }
 
-  function updatePopularityLabel(val) {
-    document.getElementById('popularityLabel').textContent = val;
+
+  let artistSearchTimer = null;
+
+  function searchArtists() {
+    clearTimeout(artistSearchTimer);
+    const q = document.getElementById('artistInput').value.trim();
+    const resultsEl = document.getElementById('artistSearchResults');
+    if (!q) { resultsEl.style.display = 'none'; return; }
+    resultsEl.style.display = 'block';
+    resultsEl.innerHTML = '<div style="padding:10px 14px;font-size:13px;color:var(--muted)">Searching…</div>';
+    artistSearchTimer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/search-artist?q=${encodeURIComponent(q)}`, {
+          headers: { 'x-admin-password': adminPassword },
+        });
+        const artists = await res.json();
+        if (!artists.length) {
+          resultsEl.innerHTML = '<div style="padding:10px 14px;font-size:13px;color:var(--muted)">No artists found</div>';
+          return;
+        }
+        resultsEl.innerHTML = artists.map(a => `
+          <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--border)">
+            <img src="${esc(a.thumbnail || '')}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;background:#333;flex-shrink:0">
+            <span style="font-size:14px;font-weight:600;flex:1">${esc(a.name)}</span>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:3px;min-width:110px" onclick="event.stopPropagation()">
+              <div style="font-size:11px;color:var(--muted)"><span class="artist-limit-label">20</span> songs</div>
+              <input type="range" min="1" max="100" value="20"
+                     style="width:100%;accent-color:var(--accent);cursor:pointer"
+                     oninput="this.previousElementSibling.querySelector('.artist-limit-label').textContent=this.value">
+            </div>
+            <button class="btn btn-primary" style="padding:5px 14px;font-size:13px;flex-shrink:0"
+                    data-artist-id="${esc(a.artistId)}" data-artist-name="${esc(a.name)}" data-thumbnail="${esc(a.thumbnail || '')}"
+                    onclick="pickArtistFromEl(this)">Add</button>
+          </div>`).join('');
+      } catch {
+        resultsEl.innerHTML = '<div style="padding:10px 14px;font-size:13px;color:var(--red)">Search failed</div>';
+      }
+    }, 400);
   }
 
-  async function savePopularity() {
-    const val = parseInt(document.getElementById('popularitySlider').value);
-    const res = await fetch('/api/pool/settings', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
-      body: JSON.stringify({ minPopularity: val }),
-    });
-    if (res.ok) await loadPool();
-  }
-
-  async function addArtist() {
-    const name = document.getElementById('artistInput').value.trim();
-    if (!name) return;
-    const btn = event.target.closest ? event.target : document.querySelector('#artistInput + button');
-    document.getElementById('artistInput').value = '';
+  async function pickArtist(artistId, artistName, thumbnail, limit = 20) {
+    clearArtistResults();
     const res = await fetch('/api/pool/artists', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ artistId, artistName, thumbnail, limit }),
     });
     if (res.ok) {
       await loadPool();
     } else {
-      const { error } = await res.json();
+      const { error } = await res.json().catch(() => ({}));
       alert(error || 'Failed to add artist');
     }
+  }
+
+  function pickArtistFromEl(el) {
+    const row = el.closest('div[style]');
+    const slider = row.querySelector('input[type="range"]');
+    const limit = Math.max(1, Math.min(100, parseInt(slider?.value) || 20));
+    pickArtist(el.dataset.artistId, el.dataset.artistName, el.dataset.thumbnail || null, limit);
+  }
+
+  function clearArtistResults() {
+    document.getElementById('artistInput').value = '';
+    document.getElementById('artistSearchResults').style.display = 'none';
   }
 
   async function removeArtist(artistId) {
