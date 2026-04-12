@@ -67,9 +67,13 @@ function loadMetadataCache() {
 // ─── Pool State ───────────────────────────────────────────────────────────────
 let poolMode = 'both'; // 'playlist' | 'discovery' | 'both'
 let artistDiscoveryRatio = 50; // 0 = all discovery (charts/genre), 100 = all artist seeds
+let smartFillEnabled = true;
+let rollingDiscoveryEnabled = true;
 let artistSeeds = []; // [{ channelId, artistName }]
 let csvPlaylists = []; // [{ name, addedAt, tracks: [...] }]
 let activeMoodIds = new Set(); // mood IDs currently active
+const moodPoolCache = new Map(); // moodId -> Array of verified tracks
+let discoveryProgress = { active: false, current: 0, target: 0, moodName: '' };
 let poolSources = {
   csv:    [],
   genre:  [],
@@ -77,6 +81,7 @@ let poolSources = {
   moods:  [],
   artist: [],
   pinned: [],
+  smart:  [],
 };
 
 // ─── Available Moods ──────────────────────────────────────────────────────────
@@ -100,7 +105,7 @@ const AVAILABLE_MOODS = [
   { id: 'organichouse', name: 'Organic House', emoji: '🌅', query: 'Organic Deep House Melodic' },
   { id: 'afrohouse',   name: 'Afro House',    emoji: '🥁', query: 'Afro House Music' },
   { id: 'jackinhouse',  name: 'Jackin\' House',   emoji: '📼', query: 'Jackin House Lo-Fi' },
-  { id: 'croatiantrash', name: 'Croatian Trash', emoji: '🇭🇷', query: 'Hrvatska eurodance 90s' },
+  { id: 'croatiantrash', name: 'Croatian Eurodance', emoji: '🇭🇷', query: 'Hrvatska eurodance 90s', tags: ['croatian', 'eurodance'] },
 ];
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -122,6 +127,106 @@ function parseISO8601Duration(duration) {
   const m = parseInt(match[2] || 0);
   const s = parseInt(match[3] || 0);
   return (h * 3600 + m * 60 + s) * 1000;
+}
+
+async function getLastFmMetadata(artist, track) {
+  if (!LASTFM_API_KEY) return null;
+  try {
+    const { data } = await axios.get('https://ws.audioscrobbler.com/2.0/', {
+      params: {
+        method: 'track.getInfo',
+        api_key: LASTFM_API_KEY,
+        artist,
+        track,
+        format: 'json',
+        autocorrect: 1
+      },
+      timeout: 5000
+    });
+    const info = data?.track;
+    if (!info) return null;
+    return {
+      artist: info.artist?.name,
+      track: info.name,
+      durationMs: parseInt(info.duration),
+      tags: info.toptags?.tag?.map(t => t.name.toLowerCase()) || []
+    };
+  } catch (err) {
+    return null;
+  }
+}
+
+async function findBestYouTubeMatch(lfmMeta) {
+  if (!ytmusicReady) return null;
+  const hardenedQuery = `"${lfmMeta.artist}" "${lfmMeta.track}"`;
+  
+  try {
+    // Use the Python microservice instead of official Google API (bypass quota)
+    const { data: songs } = await axios.get(`${YTMUSIC_SERVICE_URL}/search/songs`, {
+      params: { q: hardenedQuery, limit: 5 },
+      timeout: 10000,
+    });
+
+    if (!songs || !songs.length) {
+      console.log(`  ❌ [Smart-Fill Fail] No candidates for "${lfmMeta.track}"`);
+      return null;
+    }
+
+    let bestMatch = null;
+    let highestScore = -1;
+
+    for (const song of songs) {
+      const ytDurationMs = (song.duration || 0) * 1000;
+      const durationDiff = Math.abs(ytDurationMs - lfmMeta.durationMs);
+      const isTopic = song.videoType === 'MUSIC_VIDEO_TYPE_ATV';
+      const titleLower = song.title.toLowerCase();
+      const artistLower = song.artist.toLowerCase();
+      
+      const isOfficialChannel = artistLower.includes(lfmMeta.artist.toLowerCase()) || 
+                                lfmMeta.artist.toLowerCase().includes(artistLower);
+
+      let score = 0;
+      // Duration match (10s window)
+      if (durationDiff <= 10000) score += 50; 
+      if (durationDiff <= 3000)  score += 10;
+      
+      // High-quality indicators
+      if (isTopic) score += 30;
+      if (isOfficialChannel) score += 20;
+      
+      // Penalty for live/junk
+      if (titleLower.includes('live') || titleLower.includes('concert')) score -= 60;
+      if (titleLower.includes('karaoke') || titleLower.includes('instrumental')) score -= 100;
+
+      if (score > highestScore) {
+        highestScore = score;
+        bestMatch = { song, score };
+      }
+    }
+
+    if (bestMatch) {
+      if (highestScore >= 70) {
+        console.log(`  ✅ [Smart-Fill Match] "${bestMatch.song.title}" (Score: ${highestScore})`);
+        // Map back to the format mapVideoItemToTrack expects or return a direct track object
+        return {
+          id: bestMatch.song.videoId,
+          snippet: {
+            title: bestMatch.song.title,
+            channelTitle: bestMatch.song.artist,
+            thumbnails: { default: { url: bestMatch.song.albumArt } }
+          },
+          contentDetails: { duration: `PT${bestMatch.song.duration}S` } // pseudo-ISO for duration parser
+        };
+      } else {
+        console.log(`  ⚠️ [Smart-Fill Weak] Top score was only ${highestScore} for "${lfmMeta.track}"`);
+      }
+    }
+
+    return null;
+  } catch (err) {
+    console.error('findBestYouTubeMatch error:', err.message);
+    return null;
+  }
 }
 
 async function ytSearch(query, maxResults = 15) {
@@ -241,11 +346,26 @@ function mergePool() {
     // Include ALL artist and discovery tracks — no trimming.
     // The ratio is enforced at pick time in fetchRecommendations via weighted
     // bucket selection, so pool size is never sacrificed for ratio accuracy.
-    const discoveryTracks = activeMoodIds.size > 0
-      ? poolSources.moods.map(t  => ({ ...t, source: 'moods'  }))
-      : poolSources.charts.map(t => ({ ...t, source: 'charts' }));
+    // Include ALL discovery tracks from active moods via the cache
+    const discoveryTracks = [];
+    for (const moodId of activeMoodIds) {
+      const cached = moodPoolCache.get(moodId) || [];
+      discoveryTracks.push(...cached.map(t => ({ ...t, source: 'moods' })));
+    }
 
-    for (const track of [...poolSources.artist.map(t => ({ ...t, source: 'artist' })), ...discoveryTracks]) {
+    // Fallback to charts only if no moods are active
+    if (activeMoodIds.size === 0) {
+      discoveryTracks.push(...poolSources.charts.map(t => ({ ...t, source: 'charts' })));
+    }
+
+    // Combined pool of all available discovery methods
+    const autoPool = [
+      ...poolSources.artist.map(t => ({ ...t, source: 'artist' })),
+      ...poolSources.smart.map(t => ({ ...t, source: 'smart' })),
+      ...discoveryTracks
+    ];
+
+    for (const track of autoPool) {
       if (!seen.has(track.trackId)) {
         seen.add(track.trackId);
         merged.push({ ...track });
@@ -255,7 +375,7 @@ function mergePool() {
 
   playlistCache.bar = shuffleArray(merged);
   suggestionRotationIndex = 0;
-  console.log(`✓ Pool merged: ${merged.length} tracks [mode: ${poolMode}] (csv: ${poolSources.csv.length}, charts: ${poolSources.charts.length}, genre: ${poolSources.genre.length}, artist: ${poolSources.artist.length}, pinned: ${poolSources.pinned.length})`);
+  console.log(`✓ Pool merged: ${merged.length} tracks [mode: ${poolMode}] (csv: ${poolSources.csv.length}, charts: ${poolSources.charts.length}, moods: ${poolSources.moods.length}, smart: ${poolSources.smart.length}, artist: ${poolSources.artist.length}, pinned: ${poolSources.pinned.length})`);
   // Kick off async queue pruning — don't await, mergePool is sync
   pruneQueueToPool().catch(() => {});
 }
@@ -545,6 +665,103 @@ const CHART_PLAYLIST_QUERIES = [
   'Today\'s Hits',
 ];
 
+async function fetchSmartDiscovery(seedOverride = null) {
+  if (!smartFillEnabled) return;
+  if (!LASTFM_API_KEY || !YOUTUBE_API_KEY) return;
+  
+  let mode = 'similar';
+  let queryTarget = '';
+  
+  if (seedOverride) {
+    console.log(`🔄 Rolling Discovery: Hunting replacement for "${seedOverride.title}"...`);
+  }
+
+  // If we have active moods, 50% chance to discover based on mood instead of current track
+  // (Unless seedOverride is provided, which forces similarity mode)
+  if (!seedOverride && activeMoodIds.size > 0 && Math.random() > 0.5) {
+    mode = 'mood';
+    const moodArray = Array.from(activeMoodIds);
+    const selectedMoodId = moodArray[Math.floor(Math.random() * moodArray.length)];
+    const mood = AVAILABLE_MOODS.find(m => m.id === selectedMoodId);
+    queryTarget = mood ? mood.name : '';
+  }
+
+  if (mode === 'similar') {
+    const seedTrack = seedOverride || currentTrack || playlistCache.bar[Math.floor(Math.random() * playlistCache.bar.length)];
+    if (!seedTrack) return;
+    console.log(`🤖 Smart-Fill: Finding tracks similar to "${seedTrack.title}"...`);
+    
+    try {
+      const { data } = await axios.get('https://ws.audioscrobbler.com/2.0/', {
+        params: {
+          method: 'track.getSimilar',
+          artist: seedTrack.artist,
+          track:  cleanTitle(seedTrack.title),
+          api_key: LASTFM_API_KEY,
+          format: 'json',
+          limit: 30, 
+          autocorrect: 1
+        },
+        timeout: 8000
+      });
+      const candidates = data?.similartracks?.track || [];
+      console.log(`🤖 Smart-Fill: Found ${candidates.length} candidates on Last.fm`);
+      await processDiscoveredTracks(candidates);
+    } catch (err) { console.warn('Smart-Fill (similar) failed:', err.message); }
+  } else {
+    console.log(`🤖 Smart-Fill: Finding top tracks for mood "${queryTarget}"...`);
+    try {
+      const { data } = await axios.get('https://ws.audioscrobbler.com/2.0/', {
+        params: {
+          method: 'tag.getTopTracks',
+          tag: queryTarget,
+          api_key: LASTFM_API_KEY,
+          format: 'json',
+          limit: 30,
+          autocorrect: 1
+        },
+        timeout: 8000
+      });
+      await processDiscoveredTracks(data?.tracks?.track || []);
+    } catch (err) { console.warn('Smart-Fill (mood) failed:', err.message); }
+  }
+}
+
+async function processDiscoveredTracks(tracks) {
+  let addedCount = 0;
+  const existingIds = new Set(playlistCache.bar.map(t => t.trackId));
+  console.log(`🤖 Smart-Fill: Processing ${tracks.length} candidates...`);
+
+  for (const s of tracks) {
+    if (s.match && parseFloat(s.match) < 0.6) continue;
+
+    const meta = await getLastFmMetadata(s.artist?.name || s.artist, s.name);
+    if (!meta) continue;
+
+    const winner = await findBestYouTubeMatch(meta);
+    if (winner) {
+      if (existingIds.has(winner.id)) {
+        console.log(`  ⏭️ [Smart-Fill] "${meta.track}" already in pool, skipping.`);
+        continue;
+      }
+
+      const track = mapVideoItemToTrack(winner);
+      if (isValidSongDuration(track.duration)) {
+        poolSources.smart.push({ ...track, source: 'smart' });
+        if (poolSources.smart.length > 150) poolSources.smart.shift();
+        
+        existingIds.add(track.trackId);
+        console.log(`✨ Smart-Fill Found: "${track.title}"`);
+        addedCount++;
+      }
+    }
+    await new Promise(r => setTimeout(r, 500));
+  }
+
+  if (addedCount > 0) mergePool();
+  else console.log('🤖 Smart-Fill: No new high-confidence matches found.');
+}
+
 async function buildCacheFromCharts() {
   if (!ytmusicReady) return;
   try {
@@ -589,40 +806,127 @@ async function buildCacheFromCharts() {
 }
 
 async function buildCacheFromMoods() {
-  if (!ytmusicReady || activeMoodIds.size === 0) { poolSources.moods = []; return; }
-  console.log(`🎭 Building moods pool (${activeMoodIds.size} active)...`);
-  const collected = [];
-  const seenTracks = new Set();
-
-  for (const mood of AVAILABLE_MOODS.filter(m => activeMoodIds.has(m.id))) {
-    try {
-      const { data: playlists } = await axios.get(`${YTMUSIC_SERVICE_URL}/search/playlists`, { params: { q: mood.query }, timeout: 15000 });
-      if (!playlists.length) { console.warn(`  No playlist for mood "${mood.name}"`); continue; }
-      const playlist = playlists[0];
-      const { data: videos } = await axios.get(`${YTMUSIC_SERVICE_URL}/playlist/tracks`, { params: { id: playlist.playlistId, limit: 100 }, timeout: 20000 });
-      let added = 0;
-      for (const video of videos) {
-        if (!video.videoId || !video.duration) continue;
-        if (seenTracks.has(video.videoId)) continue;
-        seenTracks.add(video.videoId);
-        const track = mapYtmSongToTrack(video);
-        if (!isValidSongDuration(track.duration)) continue;
-        if (!isPoolEligible(track)) continue;
-        collected.push(track);
-        added++;
-      }
-      console.log(`  ✓ ${mood.emoji} ${mood.name} → "${playlist.name}": ${added} songs`);
-    } catch (err) {
-      console.warn(`  Mood "${mood.name}" failed:`, err.message);
-    }
+  if (!LASTFM_API_KEY || !YOUTUBE_API_KEY || activeMoodIds.size === 0) { 
+    poolSources.moods = []; 
+    return; 
   }
 
-  const seen = new Set();
-  poolSources.moods = collected.filter(t => seen.has(t.trackId) ? false : seen.add(t.trackId));
-  console.log(`✓ Moods pool: ${poolSources.moods.length} unique songs`);
-}
+  console.log(`🎭 Discovery-First Moods: Building pool for ${activeMoodIds.size} active moods...`);
 
-async function buildCacheFromArtists() {
+  for (const moodId of activeMoodIds) {
+    // NEW: Check if this mood is already in our verified cache
+    if (moodPoolCache.has(moodId) && moodPoolCache.get(moodId).length >= 10) {
+      console.log(`✓ Using cached tracks for mood: "${moodId}"`);
+      continue;
+    }
+
+    const mood = AVAILABLE_MOODS.find(m => m.id === moodId);
+    if (!mood) continue;
+
+    const TARGET_COUNT = 20;
+    discoveryProgress = { active: true, current: 0, target: TARGET_COUNT, moodName: mood.name };
+    broadcast();
+
+    console.log(`🔍 [Last.fm Discovery] Tag: "${mood.name}"...`);
+    const moodCollected = [];
+    const seenLocal = new Set();
+
+    try {
+      let moodAdded = 0;
+      let page = 1;
+      let failedAttempts = 0;
+      const searchTags = mood.tags || [mood.name];
+
+      while (moodAdded < TARGET_COUNT && page <= 3 && failedAttempts < 2) {
+        console.log(`🔍 [Last.fm Discovery] Tag: "${searchTags.join(' + ')}" | Page: ${page} | Current: ${moodAdded}/${TARGET_COUNT}...`);
+        // Update progress for UI
+        discoveryProgress.current = moodAdded;
+        broadcast();
+
+        let lfmTracks = [];
+        // ... (rest of tag fetch logic)
+
+        if (searchTags.length > 1) {
+          const { data } = await axios.get('https://ws.audioscrobbler.com/2.0/', {
+            params: { method: 'tag.getTopTracks', tag: searchTags[0], api_key: LASTFM_API_KEY, format: 'json', limit: 100, page: page }
+          });
+          const candidates = data?.tracks?.track || [];
+          for (const cand of candidates) {
+            const candMeta = await getLastFmMetadata(cand.artist?.name || cand.artist, cand.name);
+            if (candMeta && candMeta.tags.some(t => t.includes(searchTags[1].toLowerCase()))) lfmTracks.push(cand);
+            if (lfmTracks.length >= 40) break;
+          }
+        } else {
+          const { data } = await axios.get('https://ws.audioscrobbler.com/2.0/', {
+            params: { method: 'tag.getTopTracks', tag: mood.name, api_key: LASTFM_API_KEY, format: 'json', limit: 50, page: page }
+          });
+          lfmTracks = data?.tracks?.track || [];
+        }
+
+        if (!lfmTracks.length) break;
+
+        let passAdded = 0;
+        for (const s of lfmTracks) {
+          if (moodAdded >= TARGET_COUNT) break;
+          const artistName = s.artist?.name || s.artist;
+          const trackName = s.name;
+          const fullMeta = await getLastFmMetadata(artistName, trackName);
+          if (!fullMeta) continue;
+
+          const winner = await findBestYouTubeMatch(fullMeta);
+          if (winner && !seenLocal.has(winner.id)) {
+            const track = mapVideoItemToTrack(winner);
+            if (isValidSongDuration(track.duration) && isPoolEligible(track)) {
+              seenLocal.add(track.trackId);
+              moodCollected.push({ ...track, source: 'moods' });
+              moodAdded++;
+              passAdded++;
+              discoveryProgress.current = moodAdded;
+              // Save partially so mergePool can use it
+              moodPoolCache.set(moodId, moodCollected);
+              mergePool();
+              if (moodAdded % 5 === 0 || moodAdded === 1) broadcast();
+              }
+              }
+              await new Promise(r => setTimeout(r, 200));
+              }
+              if (passAdded === 0) failedAttempts++;
+              page++;
+              }
+
+              if (moodAdded < 10) {
+              console.log(`⚠️ [Fallback] Last.fm only found ${moodAdded} tracks for "${mood.name}". Reverting to YouTube playlists...`);
+              try {
+              const { data: playlists } = await axios.get(`${YTMUSIC_SERVICE_URL}/search/playlists`, { params: { q: mood.query }, timeout: 10000 });
+              if (playlists.length) {
+              const { data: videos } = await axios.get(`${YTMUSIC_SERVICE_URL}/playlist/tracks`, { params: { id: playlists[0].playlistId, limit: 50 } });
+              for (const video of videos) {
+              if (moodAdded >= TARGET_COUNT) break;
+              if (seenLocal.has(video.videoId)) continue;
+              const track = mapYtmSongToTrack(video);
+              if (isValidSongDuration(track.duration) && isPoolEligible(track)) {
+                seenLocal.add(track.trackId);
+                moodCollected.push({ ...track, source: 'moods' });
+                moodAdded++;
+                discoveryProgress.current = moodAdded;
+                if (moodAdded % 5 === 0) broadcast();
+              }
+              }
+              }
+              } catch (err) { console.warn(`YouTube fallback for "${mood.name}" failed:`, err.message); }
+              }
+
+              moodPoolCache.set(moodId, moodCollected);
+              console.log(`  ✓ ${mood.emoji} ${mood.name}: Final discovery total: ${moodAdded} verified tracks`);
+              } catch (err) {
+              console.warn(`  Mood discovery for "${mood.name}" failed:`, err.message);
+              }
+              }
+
+              discoveryProgress = { active: false, current: 0, target: 0, moodName: '' };
+              mergePool();
+              broadcast();
+              }async function buildCacheFromArtists() {
   if (artistSeeds.length === 0) { poolSources.artist = []; return; }
   const norm = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const collected = [];
@@ -681,10 +985,14 @@ async function ensureCacheBuilt() {
     enrichPoolWithAcousticBrainz()
       .then(() => enrichPoolWithLastFm())
       .catch(() => enrichPoolWithLastFm());
+    
+    // Kick off autonomous discovery
+    fetchSmartDiscovery().catch(() => {});
   }
 }
 
 async function rebuildPool() {
+  moodPoolCache.clear();
   await buildCacheFromCharts();
   await buildCacheFromMoods();
   if (artistSeeds.length > 0) await buildCacheFromArtists();
@@ -693,6 +1001,9 @@ async function rebuildPool() {
   enrichPoolWithAcousticBrainz()
     .then(() => enrichPoolWithLastFm())
     .catch(() => enrichPoolWithLastFm());
+  
+  // Kick off autonomous discovery
+  fetchSmartDiscovery().catch(() => {});
 }
 
 // Fetch YouTube view counts for pool tracks and store on the track objects.
@@ -914,6 +1225,7 @@ function queueState() {
 
 function broadcast() {
   io.emit('queueUpdate', queueState());
+  io.emit('poolUpdate');
 }
 
 function sanitizeTrack(track) {
@@ -995,6 +1307,35 @@ function markTrackAsPlayed(trackOrId) {
   const trackId = typeof trackOrId === 'string' ? trackOrId : trackOrId?.trackId;
   if (!trackId) return;
   recentlyPlayed.set(trackId, Date.now());
+
+  // NEW: Rolling Discovery - remove from discovery pools once played
+  if (rollingDiscoveryEnabled) {
+    const sourcesToPrune = ['moods', 'charts', 'smart', 'genre', 'artist'];
+    let removedAny = false;
+    
+    for (const src of sourcesToPrune) {
+      if (poolSources[src] && Array.isArray(poolSources[src])) {
+        const before = poolSources[src].length;
+        poolSources[src] = poolSources[src].filter(t => t.trackId !== trackId);
+        if (poolSources[src].length < before) removedAny = true;
+      }
+    }
+
+    // Also remove from moodPoolCache to prevent it coming back on mood toggle
+    for (const [moodId, tracks] of moodPoolCache.entries()) {
+      const filtered = tracks.filter(t => t.trackId !== trackId);
+      if (filtered.length < tracks.length) {
+        moodPoolCache.set(moodId, filtered);
+        removedAny = true;
+      }
+    }
+
+    if (removedAny) {
+      mergePool();
+      broadcast();
+    }
+  }
+
   // Track recent artists for spread enforcement in fetchRecommendations
   const artist = (typeof trackOrId === 'object' ? trackOrId?.artist : null)
     || playlistCache.bar.find(t => t.trackId === trackId)?.artist;
@@ -1019,6 +1360,12 @@ async function advanceToNextTrack() {
     targetTrack = next;
     if (next?.trackId) markTrackAsPlayed(next);
     lastTrackChange = now;
+    
+    // NEW: Rolling Discovery - Hunt for replacements when a new track plays
+    if (rollingDiscoveryEnabled && next) {
+      fetchSmartDiscovery(next).catch(() => {});
+    }
+
     await ensureQueueHasUpcomingTrack();
     broadcast();
     return sanitizeTrack(next);
@@ -1132,6 +1479,9 @@ app.get('/api/pool', requireAdmin, (req, res) => {
   res.json({
     mode: poolMode,
     artistDiscoveryRatio,
+    smartFillEnabled,
+    rollingDiscoveryEnabled,
+    discoveryProgress,
     activeMoodIds: [...activeMoodIds],
     artistSeeds,
     csvPlaylists: csvPlaylists.map(p => ({ name: p.name, trackCount: p.tracks.length, addedAt: p.addedAt })),
@@ -1142,6 +1492,7 @@ app.get('/api/pool', requireAdmin, (req, res) => {
       genre:  { total: poolSources.genre.length },
       artist: { total: poolSources.artist.length },
       pinned: { total: poolSources.pinned.length },
+      smart:  { total: poolSources.smart.length },
     },
     totalInPool: playlistCache.bar.length,
     tracks: playlistCache.bar.map(t => ({
@@ -1153,6 +1504,22 @@ app.get('/api/pool', requireAdmin, (req, res) => {
       explicit: t.explicit,
     })),
   });
+});
+
+app.put('/api/pool/smartfill', requireAdmin, (req, res) => {
+  const { enabled } = req.body;
+  smartFillEnabled = !!enabled;
+  if (!smartFillEnabled) {
+    poolSources.smart = [];
+    mergePool();
+  }
+  res.json({ success: true, smartFillEnabled });
+});
+
+app.put('/api/pool/rolling', requireAdmin, (req, res) => {
+  const { enabled } = req.body;
+  rollingDiscoveryEnabled = !!enabled;
+  res.json({ success: true, rollingDiscoveryEnabled });
 });
 
 app.put('/api/pool/mode', requireAdmin, (req, res) => {
@@ -1186,6 +1553,10 @@ app.put('/api/pool/moods/:id', requireAdmin, async (req, res) => {
   const { active } = req.body;
   if (active) activeMoodIds.add(id);
   else activeMoodIds.delete(id);
+  
+  // Reset smart pool on mood change to prevent genre bleed
+  poolSources.smart = []; 
+  
   await buildCacheFromMoods();
   mergePool();
   res.json({ success: true, moodId: id, active, totalInPool: playlistCache.bar.length });
@@ -1570,6 +1941,12 @@ server.listen(PORT, HOST, async () => {
   loadMetadataCache();
   await startYTMusicService();
   rebuildPool().catch(err => console.warn('Startup pool build failed:', err.message));
+
+  // Every 10 minutes, hunt for new tracks based on the current vibe
+  setInterval(() => {
+    console.log('🕒 Scheduled Smart Discovery running...');
+    fetchSmartDiscovery().catch(() => {});
+  }, 10 * 60 * 1000);
 });
 
 // Graceful shutdown — kill the Python child process so it doesn't linger

@@ -132,6 +132,14 @@
   .btn-ghost { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
   .btn-ghost:hover { background: #2a2a2a; }
 
+  /* Switch Toggle */
+  .switch { position: relative; display: inline-block; width: 44px; height: 22px; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #333; transition: .3s; border-radius: 22px; }
+  .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
+  input:checked + .slider { background-color: var(--accent); }
+  input:checked + .slider:before { transform: translateX(22px); }
+
   /* Queue Table */
   .queue-header {
     display: flex;
@@ -466,6 +474,30 @@
       <div class="pool-section" id="discoveryPoolSection">
         <div class="pool-section-label discovery-label">Discovery Pool</div>
 
+        <!-- Smart Discovery Toggle -->
+        <div style="margin-bottom:12px; display: flex; justify-content: space-between; align-items: center; background: var(--surface2); padding: 12px; border-radius: 10px; border: 1px solid var(--border);">
+          <div>
+            <div style="font-size:13px; font-weight:600; margin-bottom:2px">Smart-Fill Discovery</div>
+            <div style="font-size:11px; color:var(--muted)">Auto-hunt for similar tracks in background</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="smartFillToggle" onchange="toggleSmartFill(this.checked)">
+            <span class="slider round"></span>
+          </label>
+        </div>
+
+        <!-- Rolling Discovery Toggle -->
+        <div style="margin-bottom:24px; display: flex; justify-content: space-between; align-items: center; background: var(--surface2); padding: 12px; border-radius: 10px; border: 1px solid var(--border);">
+          <div>
+            <div style="font-size:13px; font-weight:600; margin-bottom:2px">Song Replaced in Pool after finish</div>
+            <div style="font-size:11px; color:var(--muted)">Remove played tracks and hunt for replacements</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="rollingToggle" onchange="toggleRollingDiscovery(this.checked)">
+            <span class="slider round"></span>
+          </label>
+        </div>
+
         <!-- Artist / Discovery blend slider -->
         <div style="margin-bottom:24px">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
@@ -484,6 +516,17 @@
           <div style="font-size:13px;font-weight:600;margin-bottom:4px">Moods & Genres</div>
           <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Pick the vibe — each pulls from a curated YouTube Music playlist. Changes take effect immediately.</p>
           <div class="mood-grid" id="moodGrid"></div>
+        </div>
+
+        <!-- Discovery Progress Bar -->
+        <div id="discoveryProgressContainer" style="display:none; margin-bottom:24px; background: var(--surface2); padding: 12px; border-radius: 10px; border: 1px solid var(--border);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px">
+            <span style="font-size:12px; font-weight:600; color:#8b8bff" id="discoveryMoodName">Discovering...</span>
+            <span style="font-size:11px; color:var(--muted)" id="discoveryCountText">0/50</span>
+          </div>
+          <div style="height:6px; background:#333; border-radius:3px; overflow:hidden">
+            <div id="discoveryProgressBar" style="height:100%; background:#8b8bff; width:0%; transition: width 0.3s ease;"></div>
+          </div>
         </div>
 
         <!-- Artist Seeds -->
@@ -631,6 +674,9 @@
     socket.on('queueUpdate', ({ queue, currentTrack, targetTrack }) => {
       renderAll(queue, currentTrack, targetTrack);
       lastSyncTime = Date.now();
+    });
+    socket.on('poolUpdate', () => {
+      loadPool();
     });
     
     // Gentle polling as backup to Socket.io - every 3 seconds
@@ -803,6 +849,24 @@
     await loadPool();
   }
 
+  async function toggleSmartFill(enabled) {
+    await fetch('/api/pool/smartfill', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+      body: JSON.stringify({ enabled })
+    });
+    await loadPool();
+  }
+
+  async function toggleRollingDiscovery(enabled) {
+    await fetch('/api/pool/rolling', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+      body: JSON.stringify({ enabled })
+    });
+    await loadPool();
+  }
+
   function renderPool(data) {
     // Mode buttons
     document.querySelectorAll('.mode-btn').forEach(btn => {
@@ -812,6 +876,27 @@
     // Dim sections based on mode
     document.getElementById('playlistPoolSection').classList.toggle('dimmed', data.mode === 'discovery');
     document.getElementById('discoveryPoolSection').classList.toggle('dimmed', data.mode === 'playlist');
+
+    // Smart Fill toggles
+    if (data.smartFillEnabled !== undefined) {
+      document.getElementById('smartFillToggle').checked = data.smartFillEnabled;
+    }
+    if (data.rollingDiscoveryEnabled !== undefined) {
+      document.getElementById('rollingToggle').checked = data.rollingDiscoveryEnabled;
+    }
+
+    // Discovery Progress
+    const prog = data.discoveryProgress;
+    const progContainer = document.getElementById('discoveryProgressContainer');
+    if (prog && prog.active) {
+      progContainer.style.display = 'block';
+      document.getElementById('discoveryMoodName').textContent = `Discovering: ${prog.moodName}`;
+      document.getElementById('discoveryCountText').textContent = `${prog.current}/${prog.target}`;
+      const percent = Math.round((prog.current / prog.target) * 100);
+      document.getElementById('discoveryProgressBar').style.width = percent + '%';
+    } else {
+      progContainer.style.display = 'none';
+    }
 
     // Blend slider
     if (data.artistDiscoveryRatio !== undefined) {
