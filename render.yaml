@@ -10,11 +10,9 @@ services:
         value: 0.0.0.0
       - key: ADMIN_PASSWORD
         sync: false
-      - key: SPOTIFY_CLIENT_ID
+      - key: YOUTUBE_API_KEY
         sync: false
-      - key: SPOTIFY_CLIENT_SECRET
-        sync: false
-      - key: REDIRECT_URI
+      - key: LASTFM_API_KEY
         sync: false
       - key: BLOCK_EXPLICIT
-        value: "false"
+        value: "true"

@@ -1,0 +1,9 @@
+{
+  "ignore": [
+    "metadata_cache.json",
+    "mood_blacklist.json",
+    "node_modules/*",
+    "public/*"
+  ],
+  "delay": "2500"
+}

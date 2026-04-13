@@ -27,17 +27,131 @@ let lastTrackChange = 0;
 let activeHost = { socketId: null, hostId: null };
 let recentlyPlayed = new Map(); // trackId -> timestamp of when it was played
 let recentArtists  = [];        // last 3 artist names (normalized), for spread enforcement
+const playedSessionHistory = new Set(); // Set of 'Artist - Title' strings played this session
 const viewCountCache = new Map(); // trackId -> YouTube view count, persists across rebuilds
 const lastFmCache    = new Map(); // trackId -> { energy, danceability }, persists across rebuilds
 const acousticBrainzCache = new Map(); // trackId -> { bpm, mood_party, danceability, key, scale, mbid }
 const CACHE_FILE = path.join(__dirname, 'metadata_cache.json');
+const MOOD_BLACKLIST_FILE = path.join(__dirname, 'mood_blacklist.json');
+
+const moodBlacklist = new Map(); // moodId -> Set of blacklisted 'Artist - Title' strings
+let vibeStrictness = 70; // 0-100, controlled by admin panel
+
+function saveMoodBlacklist() {
+  try {
+    const data = {};
+    for (const [moodId, set] of moodBlacklist.entries()) {
+      data[moodId] = Array.from(set);
+    }
+    fs.writeFileSync(MOOD_BLACKLIST_FILE, JSON.stringify(data, null, 2));
+  } catch (err) {
+    console.error('Failed to save mood blacklist:', err.message);
+  }
+}
+
+function loadMoodBlacklist() {
+  if (!fs.existsSync(MOOD_BLACKLIST_FILE)) return;
+  try {
+    const data = JSON.parse(fs.readFileSync(MOOD_BLACKLIST_FILE, 'utf8'));
+    for (const [moodId, strings] of Object.entries(data)) {
+      moodBlacklist.set(moodId, new Set(strings));
+    }
+    console.log(`✓ Mood blacklist loaded: ${moodBlacklist.size} moods protected`);
+  } catch (err) {
+    console.warn('Failed to load mood blacklist:', err.message);
+  }
+}
+
+let geminiDisabledUntil = 0;
+
+async function generateTracksWithGemini(prompt, moodId = null, attempt = 1) {
+  const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+  if (!GEMINI_API_KEY) return [];
+  if (Date.now() < geminiDisabledUntil) {
+    console.log('🕒 Gemini is "Cooling Down" due to previous rate limits. Using fallback discovery.');
+    return [];
+  }
+
+  const MAX_RETRIES = 2;
+  console.log(`🤖 Gemini: Generating tracks (Attempt ${attempt})...`);
+
+  // Include blacklist in prompt if moodId is provided
+  let blacklistContext = '';
+  if (moodId && moodBlacklist.has(moodId)) {
+    const list = Array.from(moodBlacklist.get(moodId)).slice(0, 50); // don't overwhelm prompt
+    if (list.length > 0) {
+      blacklistContext = `\nCRITICAL: Do NOT suggest any of these tracks: ${list.join(', ')}.`;
+    }
+  }
+
+  const fullPrompt = `${prompt}${blacklistContext}\nReturn ONLY a JSON array of objects. \nEach object MUST include: {"artist": "...", "title": "...", "bpm": 128, "energy": 0.8, "danceability": 0.7, "valence": 0.6, "musical_key": "C Major"}. \nCRITICAL: Ensure all strings are properly escaped. Do NOT include unescaped double quotes inside values. Keep it high-quality and fitting for a bar.`;
+
+  try {
+    const { data } = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        contents: [{ parts: [{ text: fullPrompt }] }],
+        generationConfig: { responseMimeType: 'application/json' }
+      },
+      { timeout: 20000 }
+    );
+
+    let resultText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+    
+    // HEURISTIC SANITIZER: Catch unescaped quotes inside JSON strings
+    // This looks for quotes that are NOT followed by , } or :
+    resultText = resultText.replace(/:\s*"([^"]*)"/g, (match, content) => {
+      const sanitized = content.replace(/"/g, "'");
+      return `: "${sanitized}"`;
+    });
+
+    const suggestions = JSON.parse(resultText);
+
+    if (Array.isArray(suggestions)) {
+      console.log(`✨ Gemini suggested ${suggestions.length} tracks with full AI-metadata.`);
+      return suggestions;
+    }
+    return [];
+  } catch (err) {
+    const status = err.response?.status;
+    if (status === 429) {
+      if (attempt <= MAX_RETRIES) {
+        const waitTime = attempt * 15000;
+        console.warn(`🕒 Gemini Rate Limited (429) on attempt ${attempt}. Waiting ${waitTime/1000}s...`);
+        await new Promise(r => setTimeout(r, waitTime));
+        return generateTracksWithGemini(prompt, moodId, attempt + 1);
+      } else {
+        console.error('❌ Gemini Quota Exhausted. Disabling AI Vetting for 10 minutes.');
+        geminiDisabledUntil = Date.now() + (10 * 60 * 1000);
+      }
+    } else {
+      console.warn(`❌ Gemini Generation failed: ${err.message}`);
+    }
+    return [];
+  }
+}
 
 function saveMetadataCache() {
   try {
     const data = {
       lastFm: Object.fromEntries(lastFmCache),
       acousticBrainz: Object.fromEntries(acousticBrainzCache),
-      viewCounts: Object.fromEntries(viewCountCache)
+      viewCounts: Object.fromEntries(viewCountCache),
+      playedSessionHistory: Array.from(playedSessionHistory),
+      moodPoolCache: Object.fromEntries(moodPoolCache),
+      poolState: {
+        poolMode,
+        artistDiscoveryRatio,
+        smartFillEnabled,
+        rollingDiscoveryEnabled,
+        artistSeeds,
+        activeMoodIds: [...activeMoodIds]
+      },
+      queueState: {
+        queue: queue.map(t => ({ ...t, voters: Array.from(t.voters) })),
+        currentTrack: currentTrack ? { ...currentTrack, voters: Array.from(currentTrack.voters) } : null,
+        targetTrack:  targetTrack  ? { ...targetTrack,  voters: Array.from(targetTrack.voters)  } : null,
+      }
     };
     fs.writeFileSync(CACHE_FILE, JSON.stringify(data, null, 2));
   } catch (err) {
@@ -58,6 +172,44 @@ function loadMetadataCache() {
     if (data.viewCounts) {
       for (const [id, val] of Object.entries(data.viewCounts)) viewCountCache.set(id, val);
     }
+
+    if (Array.isArray(data.playedSessionHistory)) {
+      for (const s of data.playedSessionHistory) playedSessionHistory.add(s);
+      console.log(`✓ Played history restored: ${playedSessionHistory.size} tracks`);
+    }
+
+    if (data.moodPoolCache) {
+      for (const [id, tracks] of Object.entries(data.moodPoolCache)) {
+        moodPoolCache.set(id, tracks);
+      }
+      console.log(`✓ Mood pool cache restored: ${moodPoolCache.size} moods populated`);
+    }
+
+    if (data.poolState) {
+      const ps = data.poolState;
+      if (ps.poolMode) poolMode = ps.poolMode;
+      if (typeof ps.artistDiscoveryRatio === 'number') artistDiscoveryRatio = ps.artistDiscoveryRatio;
+      if (typeof ps.smartFillEnabled === 'boolean') smartFillEnabled = ps.smartFillEnabled;
+      if (typeof ps.rollingDiscoveryEnabled === 'boolean') rollingDiscoveryEnabled = ps.rollingDiscoveryEnabled;
+      if (Array.isArray(ps.artistSeeds)) artistSeeds = ps.artistSeeds;
+      if (Array.isArray(ps.activeMoodIds)) activeMoodIds = new Set(ps.activeMoodIds);
+      console.log('✓ Pool state restored from cache');
+    }
+
+    if (data.queueState) {
+      const qs = data.queueState;
+      if (Array.isArray(qs.queue)) {
+        queue = qs.queue.map(t => ({ ...t, voters: new Set(t.voters || []) }));
+      }
+      if (qs.currentTrack) {
+        currentTrack = { ...qs.currentTrack, voters: new Set(qs.currentTrack.voters || []) };
+      }
+      if (qs.targetTrack) {
+        targetTrack = { ...qs.targetTrack, voters: new Set(qs.targetTrack.voters || []) };
+      }
+      console.log(`✓ Active queue restored: ${queue.length} tracks`);
+    }
+
     console.log(`✓ Metadata cache loaded: ${lastFmCache.size} Last.fm, ${acousticBrainzCache.size} AcousticBrainz, ${viewCountCache.size} view counts`);
   } catch (err) {
     console.warn('Failed to load metadata cache:', err.message);
@@ -105,7 +257,8 @@ const AVAILABLE_MOODS = [
   { id: 'organichouse', name: 'Organic House', emoji: '🌅', query: 'Organic Deep House Melodic' },
   { id: 'afrohouse',   name: 'Afro House',    emoji: '🥁', query: 'Afro House Music' },
   { id: 'jackinhouse',  name: 'Jackin\' House',   emoji: '📼', query: 'Jackin House Lo-Fi' },
-  { id: 'croatiantrash', name: 'Croatian Eurodance', emoji: '🇭🇷', query: 'Hrvatska eurodance 90s', tags: ['croatian', 'eurodance'] },
+  { id: 'croatianeurodance', name: 'Croatian Eurodance', emoji: '🕺', query: 'Hrvatska eurodance 90s', description: "Provide a mix of popular 90s and 2000s Croatian Eurodance and dance-pop hits. Focus on high-energy tracks suitable for a club or bar atmosphere. Include well-known artists from the era." },
+  { id: 'croatiantrash', name: 'Croatian Treš', emoji: '🇭🇷', query: 'Hrvatska trash 90s dance', description: "Act as a Croatian music expert specializing in the 'Treš' (Trash) sub-culture of the late 1990s and early 2000s. Provide a list of high-energy Croatian dance-pop and bubblegum pop songs. Focus strictly on the 'Cro-Dance' era characterized by Eurodance beats, heavy synthesizers, and club-friendly tempos. Include artists like Ivana Brkić, Vesna Pisarović (dance era), Colonia, ET, Karma, and Minea. Specifically look for tracks with the vibe of 'Oči boje kestena.' Avoid slow ballads, rock, or traditional klapa." },
 ];
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -158,73 +311,43 @@ async function getLastFmMetadata(artist, track) {
 
 async function findBestYouTubeMatch(lfmMeta) {
   if (!ytmusicReady) return null;
-  const hardenedQuery = `"${lfmMeta.artist}" "${lfmMeta.track}"`;
+  // Gemini uses 'title', Last.fm uses 'track'. Handle both.
+  const trackName = lfmMeta.title || lfmMeta.track;
+  const artistName = lfmMeta.artist;
+
+  if (!trackName || !artistName) {
+    console.warn(`⚠️ [AI-DJ] Missing metadata for YouTube search: Artist: ${artistName}, Title: ${trackName}`);
+    return null;
+  }
+
+  const query = `"${artistName}" "${trackName}"`;
   
   try {
-    // Use the Python microservice instead of official Google API (bypass quota)
     const { data: songs } = await axios.get(`${YTMUSIC_SERVICE_URL}/search/songs`, {
-      params: { q: hardenedQuery, limit: 5 },
+      params: { q: query, limit: 3 },
       timeout: 10000,
     });
 
     if (!songs || !songs.length) {
-      console.log(`  ❌ [Smart-Fill Fail] No candidates for "${lfmMeta.track}"`);
+      console.log(`  ❌ [YouTube] No results for: ${query}`);
       return null;
     }
 
-    let bestMatch = null;
-    let highestScore = -1;
+    // Take the first result — we trust Gemini's curation
+    const best = songs[0];
+    console.log(`  ✅ [YouTube] Found match: "${best.title}" by ${best.artist}`);
 
-    for (const song of songs) {
-      const ytDurationMs = (song.duration || 0) * 1000;
-      const durationDiff = Math.abs(ytDurationMs - lfmMeta.durationMs);
-      const isTopic = song.videoType === 'MUSIC_VIDEO_TYPE_ATV';
-      const titleLower = song.title.toLowerCase();
-      const artistLower = song.artist.toLowerCase();
-      
-      const isOfficialChannel = artistLower.includes(lfmMeta.artist.toLowerCase()) || 
-                                lfmMeta.artist.toLowerCase().includes(artistLower);
-
-      let score = 0;
-      // Duration match (10s window)
-      if (durationDiff <= 10000) score += 50; 
-      if (durationDiff <= 3000)  score += 10;
-      
-      // High-quality indicators
-      if (isTopic) score += 30;
-      if (isOfficialChannel) score += 20;
-      
-      // Penalty for live/junk
-      if (titleLower.includes('live') || titleLower.includes('concert')) score -= 60;
-      if (titleLower.includes('karaoke') || titleLower.includes('instrumental')) score -= 100;
-
-      if (score > highestScore) {
-        highestScore = score;
-        bestMatch = { song, score };
-      }
-    }
-
-    if (bestMatch) {
-      if (highestScore >= 70) {
-        console.log(`  ✅ [Smart-Fill Match] "${bestMatch.song.title}" (Score: ${highestScore})`);
-        // Map back to the format mapVideoItemToTrack expects or return a direct track object
-        return {
-          id: bestMatch.song.videoId,
-          snippet: {
-            title: bestMatch.song.title,
-            channelTitle: bestMatch.song.artist,
-            thumbnails: { default: { url: bestMatch.song.albumArt } }
-          },
-          contentDetails: { duration: `PT${bestMatch.song.duration}S` } // pseudo-ISO for duration parser
-        };
-      } else {
-        console.log(`  ⚠️ [Smart-Fill Weak] Top score was only ${highestScore} for "${lfmMeta.track}"`);
-      }
-    }
-
-    return null;
+    return {
+      id: best.videoId,
+      snippet: {
+        title: best.title,
+        channelTitle: best.artist,
+        thumbnails: { default: { url: best.albumArt } }
+      },
+      contentDetails: { duration: `PT${best.duration}S` }
+    };
   } catch (err) {
-    console.error('findBestYouTubeMatch error:', err.message);
+    console.error(`findBestYouTubeMatch error for ${query}:`, err.message);
     return null;
   }
 }
@@ -665,74 +788,103 @@ const CHART_PLAYLIST_QUERIES = [
   'Today\'s Hits',
 ];
 
-async function fetchSmartDiscovery(seedOverride = null) {
+async function fetchSmartDiscovery(seedOverride = null, attempt = 1, skipGemini = false) {
   if (!smartFillEnabled) return;
   if (!LASTFM_API_KEY || !YOUTUBE_API_KEY) return;
   
-  let mode = 'similar';
-  let queryTarget = '';
+  let activeMoodId = null;
+  let activeMoodName = 'General Vibe';
   
-  if (seedOverride) {
-    console.log(`🔄 Rolling Discovery: Hunting replacement for "${seedOverride.title}"...`);
+  if (activeMoodIds.size > 0) {
+    activeMoodId = Array.from(activeMoodIds)[0];
+    const mood = AVAILABLE_MOODS.find(m => m.id === activeMoodId);
+    activeMoodName = mood ? mood.name : 'General Vibe';
   }
 
-  // If we have active moods, 50% chance to discover based on mood instead of current track
-  // (Unless seedOverride is provided, which forces similarity mode)
-  if (!seedOverride && activeMoodIds.size > 0 && Math.random() > 0.5) {
-    mode = 'mood';
-    const moodArray = Array.from(activeMoodIds);
-    const selectedMoodId = moodArray[Math.floor(Math.random() * moodArray.length)];
-    const mood = AVAILABLE_MOODS.find(m => m.id === selectedMoodId);
-    queryTarget = mood ? mood.name : '';
+  if (skipGemini) {
+    console.log(`🕒 Rolling Discovery: AI vetting skipped. Using fallback logic for replacement.`);
+    // Fallback to random chart song if AI is disabled
+    await fetchSafetyReplacement();
+    return;
   }
 
-  if (mode === 'similar') {
-    const seedTrack = seedOverride || currentTrack || playlistCache.bar[Math.floor(Math.random() * playlistCache.bar.length)];
-    if (!seedTrack) return;
-    console.log(`🤖 Smart-Fill: Finding tracks similar to "${seedTrack.title}"...`);
+  const seedTrack = seedOverride || currentTrack || playlistCache.bar[playlistCache.bar.length * Math.random() | 0];
+  if (!seedTrack) return;
+
+  console.log(`🤖 AI-DJ Rolling: Finding perfect transition for "${seedTrack.artist} - ${seedTrack.title}" in mood "${activeMoodName}"...`);
+
+  try {
+    const prompt = `I am a bar DJ. The last track played was "${seedTrack.artist} - ${seedTrack.title}". 
+The current vibe is: "${activeMoodName}".
+Give me 5 tracks that would flow perfectly right after this one. 
+Keep the energy consistent and the vibe authentic to the mood.`;
     
-    try {
-      const { data } = await axios.get('https://ws.audioscrobbler.com/2.0/', {
-        params: {
-          method: 'track.getSimilar',
-          artist: seedTrack.artist,
-          track:  cleanTitle(seedTrack.title),
-          api_key: LASTFM_API_KEY,
-          format: 'json',
-          limit: 30, 
-          autocorrect: 1
-        },
-        timeout: 8000
-      });
-      const candidates = data?.similartracks?.track || [];
-      console.log(`🤖 Smart-Fill: Found ${candidates.length} candidates on Last.fm`);
-      await processDiscoveredTracks(candidates);
-    } catch (err) { console.warn('Smart-Fill (similar) failed:', err.message); }
-  } else {
-    console.log(`🤖 Smart-Fill: Finding top tracks for mood "${queryTarget}"...`);
-    try {
-      const { data } = await axios.get('https://ws.audioscrobbler.com/2.0/', {
-        params: {
-          method: 'tag.getTopTracks',
-          tag: queryTarget,
-          api_key: LASTFM_API_KEY,
-          format: 'json',
-          limit: 30,
-          autocorrect: 1
-        },
-        timeout: 8000
-      });
-      await processDiscoveredTracks(data?.tracks?.track || []);
-    } catch (err) { console.warn('Smart-Fill (mood) failed:', err.message); }
+    const suggestions = await generateTracksWithGemini(prompt, activeMoodId);
+    
+    if (!suggestions.length) {
+      console.warn('⚠️ [AI-DJ] Gemini gave no rolling suggestions. Using safety fallback.');
+      await fetchSafetyReplacement();
+      return;
+    }
+
+    let foundMatch = false;
+    for (const s of suggestions) {
+      const winner = await findBestYouTubeMatch(s);
+      if (winner) {
+        const track = mapVideoItemToTrack(winner);
+        if (isValidSongDuration(track.duration) && isPoolEligible(track)) {
+          // Check for blacklist one last time
+          const blacklist = activeMoodId ? moodBlacklist.get(activeMoodId) : null;
+          const entry = `${track.artist} - ${track.title}`;
+          if (blacklist && blacklist.has(entry)) continue;
+
+          poolSources.smart.push({ ...track, source: 'smart' });
+          if (poolSources.smart.length > 150) poolSources.smart.shift();
+          
+          console.log(`✨ AI-DJ Picked Transition: "${track.title}"`);
+          foundMatch = true;
+          mergePool();
+          break;
+        }
+      }
+      await new Promise(r => setTimeout(r, 300));
+    }
+
+    if (!foundMatch) {
+      console.warn('⚠️ [AI-DJ] Could not resolve any Gemini suggestions on YouTube. Using safety fallback.');
+      await fetchSafetyReplacement();
+    }
+  } catch (err) {
+    console.warn('AI-DJ Rolling Discovery failed:', err.message);
+    await fetchSafetyReplacement();
   }
 }
 
-async function processDiscoveredTracks(tracks) {
+async function fetchSafetyReplacement() {
+  // Try to pick a track from Charts pool that isn't already in the merged pool
+  const chartTracks = poolSources.charts;
+  if (chartTracks.length > 0) {
+    const randomChart = chartTracks[chartTracks.length * Math.random() | 0];
+    if (randomChart) {
+       poolSources.smart.push({ ...randomChart, source: 'smart' });
+       console.log(`✅ Safety Fallback: Added chart track "${randomChart.title}" to maintain pool size.`);
+       mergePool();
+       return;
+    }
+  }
+  console.warn('❌ Safety Fallback failed: No chart tracks available.');
+}
+
+async function processDiscoveredTracks(tracks, maxToStore = null, moodName = 'General', moodId = null, skipGemini = false) {
   let addedCount = 0;
   const existingIds = new Set(playlistCache.bar.map(t => t.trackId));
+  const blacklist = moodId ? moodBlacklist.get(moodId) : null;
+
   console.log(`🤖 Smart-Fill: Processing ${tracks.length} candidates...`);
 
+  const discovered = [];
   for (const s of tracks) {
+    if (maxToStore && addedCount >= maxToStore) break;
     if (s.match && parseFloat(s.match) < 0.6) continue;
 
     const meta = await getLastFmMetadata(s.artist?.name || s.artist, s.name);
@@ -744,22 +896,44 @@ async function processDiscoveredTracks(tracks) {
         console.log(`  ⏭️ [Smart-Fill] "${meta.track}" already in pool, skipping.`);
         continue;
       }
+      
+      if (blacklist && blacklist.has(winner.id)) {
+        console.log(`  🚫 [Blacklist] "${meta.track}" is blacklisted for mood "${moodName}", skipping.`);
+        continue;
+      }
 
       const track = mapVideoItemToTrack(winner);
       if (isValidSongDuration(track.duration)) {
-        poolSources.smart.push({ ...track, source: 'smart' });
-        if (poolSources.smart.length > 150) poolSources.smart.shift();
-        
-        existingIds.add(track.trackId);
-        console.log(`✨ Smart-Fill Found: "${track.title}"`);
+        discovered.push({ ...track, source: 'smart' });
         addedCount++;
       }
     }
-    await new Promise(r => setTimeout(r, 500));
+    // Minimal throttle to respect APIs
+    if (!maxToStore || addedCount < maxToStore) {
+      await new Promise(r => setTimeout(r, 400));
+    }
   }
 
-  if (addedCount > 0) mergePool();
-  else console.log('🤖 Smart-Fill: No new high-confidence matches found.');
+  // Phase 2: AI Vibe Check (Gemini)
+  let vetted = discovered;
+  if (discovered.length > 0 && moodId && !skipGemini) {
+    vetted = await vetTracksWithGemini(discovered, moodName, moodId);
+  }
+
+  // Phase 3: Add vetted tracks to pool
+  if (vetted.length > 0) {
+    vetted.forEach(track => {
+      poolSources.smart.push(track);
+      if (poolSources.smart.length > 150) poolSources.smart.shift();
+    });
+    mergePool();
+  } else if (discovered.length > 0) {
+    console.log('🤖 Smart-Fill: All discovered tracks were rejected by Gemini (or skipped).');
+  } else {
+    console.log('🤖 Smart-Fill: No new high-confidence matches found.');
+  }
+
+  return vetted.length;
 }
 
 async function buildCacheFromCharts() {
@@ -811,7 +985,7 @@ async function buildCacheFromMoods() {
     return; 
   }
 
-  console.log(`🎭 Discovery-First Moods: Building pool for ${activeMoodIds.size} active moods...`);
+  console.log(`🎭 AI-DJ Moods: Building pool for ${activeMoodIds.size} active moods...`);
 
   for (const moodId of activeMoodIds) {
     // NEW: Check if this mood is already in our verified cache
@@ -823,110 +997,144 @@ async function buildCacheFromMoods() {
     const mood = AVAILABLE_MOODS.find(m => m.id === moodId);
     if (!mood) continue;
 
-    const TARGET_COUNT = 20;
+    const TARGET_COUNT = 50;
     discoveryProgress = { active: true, current: 0, target: TARGET_COUNT, moodName: mood.name };
     broadcast();
 
-    console.log(`🔍 [Last.fm Discovery] Tag: "${mood.name}"...`);
+    console.log(`🔍 [AI-DJ Discovery] Vibe: "${mood.name}"...`);
     const moodCollected = [];
     const seenLocal = new Set();
 
     try {
+      const basePrompt = mood.description || `You are a bar DJ. The current mood is: "${mood.name}". Include a mix of well-known hits and perfect "deep cuts" for a bar atmosphere.`;
+      const prompt = `${basePrompt}\nGive me ${TARGET_COUNT + 10} high-quality, essential tracks that perfectly fit this vibe.`;
+      
+      const suggestions = await generateTracksWithGemini(prompt, moodId);
+      
+      if (!suggestions.length) {
+        console.warn(`⚠️ [AI-DJ] Gemini gave no suggestions for "${mood.name}".`);
+        continue;
+      }
+
       let moodAdded = 0;
-      let page = 1;
-      let failedAttempts = 0;
-      const searchTags = mood.tags || [mood.name];
+      for (const s of suggestions) {
+        if (moodAdded >= TARGET_COUNT) break;
+        
+        // 1. Resolve on YouTube
+        const winner = await findBestYouTubeMatch(s);
+        if (winner && !seenLocal.has(winner.id)) {
+          const track = mapVideoItemToTrack(winner);
+          
+          // 2. Technical and content checks
+          if (isValidSongDuration(track.duration) && isPoolEligible(track)) {
+            seenLocal.add(track.trackId);
+            
+            // 3. Attach Gemini metadata (overriding/filling technical scores)
+            const enrichedTrack = { 
+              ...track, 
+              source: 'moods',
+              bpm: s.bpm || null,
+              mood_party: s.energy || null, // map energy to our party field
+              danceability: s.danceability || null,
+              valence: s.valence || null,
+              key: s.musical_key || null,
+              aiGenerated: true
+            };
 
-      while (moodAdded < TARGET_COUNT && page <= 3 && failedAttempts < 2) {
-        console.log(`🔍 [Last.fm Discovery] Tag: "${searchTags.join(' + ')}" | Page: ${page} | Current: ${moodAdded}/${TARGET_COUNT}...`);
-        // Update progress for UI
-        discoveryProgress.current = moodAdded;
-        broadcast();
-
-        let lfmTracks = [];
-        // ... (rest of tag fetch logic)
-
-        if (searchTags.length > 1) {
-          const { data } = await axios.get('https://ws.audioscrobbler.com/2.0/', {
-            params: { method: 'tag.getTopTracks', tag: searchTags[0], api_key: LASTFM_API_KEY, format: 'json', limit: 100, page: page }
-          });
-          const candidates = data?.tracks?.track || [];
-          for (const cand of candidates) {
-            const candMeta = await getLastFmMetadata(cand.artist?.name || cand.artist, cand.name);
-            if (candMeta && candMeta.tags.some(t => t.includes(searchTags[1].toLowerCase()))) lfmTracks.push(cand);
-            if (lfmTracks.length >= 40) break;
+            moodCollected.push(enrichedTrack);
+            moodAdded++;
+            discoveryProgress.current = moodAdded;
+            
+            // NEW: Real-time UI updates
+            moodPoolCache.set(moodId, moodCollected);
+            mergePool();
+            broadcast();
           }
-        } else {
-          const { data } = await axios.get('https://ws.audioscrobbler.com/2.0/', {
-            params: { method: 'tag.getTopTracks', tag: mood.name, api_key: LASTFM_API_KEY, format: 'json', limit: 50, page: page }
-          });
-          lfmTracks = data?.tracks?.track || [];
         }
+        // Minimal delay between YouTube searches
+        await new Promise(r => setTimeout(r, 200));
+      }
 
-        if (!lfmTracks.length) break;
+      console.log(`  ✓ ${mood.emoji} ${mood.name}: Final AI-curated total: ${moodAdded} verified tracks`);
+      // Polite delay between moods
+      await new Promise(r => setTimeout(r, 2000));
+    } catch (err) {
+      console.warn(`  AI-DJ discovery for "${mood.name}" failed:`, err.message);
+    }
+  }
 
-        let passAdded = 0;
-        for (const s of lfmTracks) {
-          if (moodAdded >= TARGET_COUNT) break;
-          const artistName = s.artist?.name || s.artist;
-          const trackName = s.name;
-          const fullMeta = await getLastFmMetadata(artistName, trackName);
-          if (!fullMeta) continue;
+  discoveryProgress = { active: false, current: 0, target: 0, moodName: '' };
+  mergePool();
+  broadcast();
+}
 
-          const winner = await findBestYouTubeMatch(fullMeta);
-          if (winner && !seenLocal.has(winner.id)) {
-            const track = mapVideoItemToTrack(winner);
-            if (isValidSongDuration(track.duration) && isPoolEligible(track)) {
-              seenLocal.add(track.trackId);
-              moodCollected.push({ ...track, source: 'moods' });
-              moodAdded++;
-              passAdded++;
-              discoveryProgress.current = moodAdded;
-              // Save partially so mergePool can use it
-              moodPoolCache.set(moodId, moodCollected);
-              mergePool();
-              if (moodAdded % 5 === 0 || moodAdded === 1) broadcast();
-              }
-              }
-              await new Promise(r => setTimeout(r, 200));
-              }
-              if (passAdded === 0) failedAttempts++;
-              page++;
-              }
+async function refillMoodPool(moodId) {
+  const mood = AVAILABLE_MOODS.find(m => m.id === moodId);
+  if (!mood) return;
 
-              if (moodAdded < 10) {
-              console.log(`⚠️ [Fallback] Last.fm only found ${moodAdded} tracks for "${mood.name}". Reverting to YouTube playlists...`);
-              try {
-              const { data: playlists } = await axios.get(`${YTMUSIC_SERVICE_URL}/search/playlists`, { params: { q: mood.query }, timeout: 10000 });
-              if (playlists.length) {
-              const { data: videos } = await axios.get(`${YTMUSIC_SERVICE_URL}/playlist/tracks`, { params: { id: playlists[0].playlistId, limit: 50 } });
-              for (const video of videos) {
-              if (moodAdded >= TARGET_COUNT) break;
-              if (seenLocal.has(video.videoId)) continue;
-              const track = mapYtmSongToTrack(video);
-              if (isValidSongDuration(track.duration) && isPoolEligible(track)) {
-                seenLocal.add(track.trackId);
-                moodCollected.push({ ...track, source: 'moods' });
-                moodAdded++;
-                discoveryProgress.current = moodAdded;
-                if (moodAdded % 5 === 0) broadcast();
-              }
-              }
-              }
-              } catch (err) { console.warn(`YouTube fallback for "${mood.name}" failed:`, err.message); }
-              }
+  const currentTracks = moodPoolCache.get(moodId) || [];
+  const inPoolList = currentTracks.map(t => `${t.artist} - ${t.title}`).join(', ');
+  const alreadyPlayedList = Array.from(playedSessionHistory).slice(-50).join(', '); // last 50 played
 
-              moodPoolCache.set(moodId, moodCollected);
-              console.log(`  ✓ ${mood.emoji} ${mood.name}: Final discovery total: ${moodAdded} verified tracks`);
-              } catch (err) {
-              console.warn(`  Mood discovery for "${mood.name}" failed:`, err.message);
-              }
-              }
+  const basePrompt = mood.description || `I am a bar DJ. My current vibe is: "${mood.name}". Keep the vibe consistent, high-energy for a bar, and different from what has already played.`;
+  const prompt = `${basePrompt}
+  
+CRITICAL CONTEXT:
+Currently in pool: ${inPoolList}.
+Played this session: ${alreadyPlayedList}.
 
-              discoveryProgress = { active: false, current: 0, target: 0, moodName: '' };
-              mergePool();
-              broadcast();
-              }async function buildCacheFromArtists() {
+Give me 20 NEW, high-quality tracks that fit this vibe but are NOT in either list above.`;
+
+  try {
+    const suggestions = await generateTracksWithGemini(prompt, moodId);
+    if (!suggestions.length) return;
+
+    console.log(`🔍 [Refill] Resolving ${suggestions.length} new tracks for ${mood.name}...`);
+    
+    // Set discovery progress for UI feedback during refill
+    discoveryProgress = { active: true, current: 0, target: suggestions.length, moodName: `${mood.name} (Refill)` };
+    broadcast();
+
+    const seenIds = new Set(currentTracks.map(t => t.trackId));
+    let added = 0;
+
+    for (const s of suggestions) {
+      const winner = await findBestYouTubeMatch(s);
+      if (winner && !seenIds.has(winner.id)) {
+        const track = mapVideoItemToTrack(winner);
+        if (isValidSongDuration(track.duration) && isPoolEligible(track)) {
+          const enrichedTrack = { 
+            ...track, 
+            source: 'moods',
+            bpm: s.bpm || null,
+            mood_party: s.energy || null,
+            danceability: s.danceability || null,
+            valence: s.valence || null,
+            key: s.musical_key || null,
+            aiGenerated: true
+          };
+          currentTracks.push(enrichedTrack);
+          seenIds.add(track.trackId);
+          added++;
+          
+          discoveryProgress.current = added;
+          moodPoolCache.set(moodId, currentTracks);
+          mergePool();
+          broadcast();
+        }
+      }
+      await new Promise(r => setTimeout(r, 200));
+    }
+
+    discoveryProgress = { active: false, current: 0, target: 0, moodName: '' };
+    console.log(`✅ [Refill] Added ${added} new tracks to "${mood.name}". Total now: ${currentTracks.length}`);
+    broadcast();
+  } catch (err) {
+    console.error(`Refill failed for ${mood.name}:`, err.message);
+  }
+}
+
+async function buildCacheFromArtists() {
   if (artistSeeds.length === 0) { poolSources.artist = []; return; }
   const norm = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const collected = [];
@@ -985,27 +1193,31 @@ async function ensureCacheBuilt() {
     enrichPoolWithAcousticBrainz()
       .then(() => enrichPoolWithLastFm())
       .catch(() => enrichPoolWithLastFm());
-    
-    // Kick off autonomous discovery
-    fetchSmartDiscovery().catch(() => {});
   }
 }
 
 async function rebuildPool() {
-  moodPoolCache.clear();
+  // Always rebuild the static charts pool on startup
   await buildCacheFromCharts();
-  await buildCacheFromMoods();
+
+  // On startup, we only use what was loaded from metadata_cache.json for moods.
+  // If the cache was empty, moodPoolCache remains empty until user "Populates" it.
+  if (moodPoolCache.size > 0) {
+    console.log(`✓ Mood pool cache restored: ${moodPoolCache.size} moods active`);
+  } else {
+    console.log('🔄 Mood pool cache empty. Waiting for manual population.');
+  }
+
   if (artistSeeds.length > 0) await buildCacheFromArtists();
   mergePool();
   enrichPoolWithViewCounts().catch(() => {});
   enrichPoolWithAcousticBrainz()
     .then(() => enrichPoolWithLastFm())
     .catch(() => enrichPoolWithLastFm());
-  
-  // Kick off autonomous discovery
-  fetchSmartDiscovery().catch(() => {});
-}
 
+  // Kick off autonomous discovery - SKIP GEMINI on startup
+  fetchSmartDiscovery(null, 1, true).catch(() => {});
+}
 // Fetch YouTube view counts for pool tracks and store on the track objects.
 // Uses a persistent cache so counts survive pool rebuilds without re-fetching.
 // Runs async after pool build — recommendations fall back to unscored until done.
@@ -1226,6 +1438,7 @@ function queueState() {
 function broadcast() {
   io.emit('queueUpdate', queueState());
   io.emit('poolUpdate');
+  saveMetadataCache();
 }
 
 function sanitizeTrack(track) {
@@ -1303,7 +1516,7 @@ async function ensureQueueHasUpcomingTrack() {
   return false;
 }
 
-function markTrackAsPlayed(trackOrId) {
+function markTrackAsPlayed(trackOrId, manualBlacklist = false) {
   const trackId = typeof trackOrId === 'string' ? trackOrId : trackOrId?.trackId;
   if (!trackId) return;
   recentlyPlayed.set(trackId, Date.now());
@@ -1312,27 +1525,88 @@ function markTrackAsPlayed(trackOrId) {
   if (rollingDiscoveryEnabled) {
     const sourcesToPrune = ['moods', 'charts', 'smart', 'genre', 'artist'];
     let removedAny = false;
+    let removedFrom = [];
     
     for (const src of sourcesToPrune) {
       if (poolSources[src] && Array.isArray(poolSources[src])) {
         const before = poolSources[src].length;
         poolSources[src] = poolSources[src].filter(t => t.trackId !== trackId);
-        if (poolSources[src].length < before) removedAny = true;
+        if (poolSources[src].length < before) {
+          removedAny = true;
+          removedFrom.push(src);
+        }
       }
     }
 
     // Also remove from moodPoolCache to prevent it coming back on mood toggle
     for (const [moodId, tracks] of moodPoolCache.entries()) {
+      const before = tracks.length;
       const filtered = tracks.filter(t => t.trackId !== trackId);
-      if (filtered.length < tracks.length) {
+      if (filtered.length < before) {
         moodPoolCache.set(moodId, filtered);
         removedAny = true;
+        removedFrom.push(`cache:${moodId}`);
       }
     }
 
     if (removedAny) {
+      // Capture seed BEFORE merging (which removes it from the list)
+      let seedTrack = typeof trackOrId === 'object' ? trackOrId : null;
+      if (!seedTrack || !seedTrack.title || !seedTrack.artist) {
+        seedTrack = playlistCache.bar.find(t => t.trackId === trackId);
+      }
+
+      // NEW: Session History Tracking
+      // Track what has played this session to avoid repetition in refills
+      if (seedTrack && seedTrack.artist && seedTrack.title) {
+        playedSessionHistory.add(`${seedTrack.artist} - ${seedTrack.title}`);
+      }
+
+      console.log(`🔄 [Pruning] [${trackId}] removed from [${removedFrom.join(',')}]. Session history: ${playedSessionHistory.size} songs.`);
+      
+      // NEW: Persistent Artist-Title Blacklisting - ONLY IF MANUAL
+      if (manualBlacklist) {
+        removedFrom.forEach(src => {
+          if (src.startsWith('cache:')) {
+            const moodId = src.split(':')[1];
+            if (seedTrack && seedTrack.artist && seedTrack.title) {
+              const entry = `${seedTrack.artist} - ${seedTrack.title}`;
+              if (!moodBlacklist.has(moodId)) moodBlacklist.set(moodId, new Set());
+              moodBlacklist.get(moodId).add(entry);
+              console.log(`🚫 MANUAL BLACKLIST [${moodId}]: ${entry}`);
+            }
+          }
+        });
+        saveMoodBlacklist();
+      }
+
       mergePool();
       broadcast();
+      
+      // 1. Primary: 1-for-1 Rolling Discovery (OFF for now to save API)
+      /*
+      if (rollingDiscoveryEnabled) {
+        if (seedTrack && seedTrack.title) {
+          fetchSmartDiscovery(seedTrack).catch(err => console.error('Rolling Discovery Error:', err.message));
+        } else {
+          console.warn(`⚠️ Rolling Discovery: Could not find track details for [${trackId}] to use as seed. Using random pool seed.`);
+          fetchSmartDiscovery().catch(err => console.error('Rolling Discovery Error:', err.message));
+        }
+      }
+      */
+
+      // 2. Main Replenishment: Watermark Trigger
+      // Refills when pool hits 40 (after 10 songs played from 50)
+      removedFrom.forEach(src => {
+        if (src.startsWith('cache:')) {
+          const moodId = src.split(':')[1];
+          const currentCount = moodPoolCache.get(moodId)?.length || 0;
+          if (currentCount < 40) {
+            console.log(`🚰 [Watermark] Mood "${moodId}" dropped to ${currentCount}. Triggering bulk refill...`);
+            refillMoodPool(moodId).catch(err => console.error(`Refill failed for ${moodId}:`, err.message));
+          }
+        }
+      });
     }
   }
 
@@ -1361,11 +1635,6 @@ async function advanceToNextTrack() {
     if (next?.trackId) markTrackAsPlayed(next);
     lastTrackChange = now;
     
-    // NEW: Rolling Discovery - Hunt for replacements when a new track plays
-    if (rollingDiscoveryEnabled && next) {
-      fetchSmartDiscovery(next).catch(() => {});
-    }
-
     await ensureQueueHasUpcomingTrack();
     broadcast();
     return sanitizeTrack(next);
@@ -1407,6 +1676,40 @@ app.get('/api/search', async (req, res) => {
   } catch (err) {
     console.error('Search error:', err.response?.data || err.message);
     res.status(500).json({ error: 'Search failed' });
+  }
+});
+
+app.post('/api/resolve-alternate', async (req, res) => {
+  const { trackId, title, artist } = req.body;
+  if (!trackId || !title) return res.status(400).json({ error: 'trackId and title required' });
+  
+  console.log(`🔍 [Resolving Alternate] for: ${title} - ${artist} (Original: ${trackId})`);
+  
+  try {
+    if (!ytmusicReady) return res.status(503).json({ error: 'YTM microservice not ready' });
+    
+    const query = `${title} ${artist || ''}`.trim();
+    const { data: songs } = await axios.get(`${YTMUSIC_SERVICE_URL}/search/songs`, {
+      params: { q: query, limit: 15 },
+      timeout: 10000,
+    });
+    
+    if (!songs || !songs.length) return res.status(404).json({ error: 'No alternates found' });
+    
+    // Find best candidate: non-video, studio version (ATV), non-blocked, and different from original
+    const candidate = songs.find(s => 
+      s.videoId && 
+      s.videoId !== trackId && 
+      s.videoType === 'MUSIC_VIDEO_TYPE_ATV'
+    ) || songs.find(s => s.videoId && s.videoId !== trackId);
+    
+    if (!candidate) return res.status(404).json({ error: 'No suitable alternate found' });
+    
+    console.log(`✅ [Resolved Alternate] found: ${candidate.title} (${candidate.videoId})`);
+    res.json({ trackId: candidate.videoId });
+  } catch (err) {
+    console.error('Resolve alternate error:', err.message);
+    res.status(500).json({ error: 'Resolve failed' });
   }
 });
 
@@ -1513,12 +1816,14 @@ app.put('/api/pool/smartfill', requireAdmin, (req, res) => {
     poolSources.smart = [];
     mergePool();
   }
+  saveMetadataCache();
   res.json({ success: true, smartFillEnabled });
 });
 
 app.put('/api/pool/rolling', requireAdmin, (req, res) => {
   const { enabled } = req.body;
   rollingDiscoveryEnabled = !!enabled;
+  saveMetadataCache();
   res.json({ success: true, rollingDiscoveryEnabled });
 });
 
@@ -1529,6 +1834,7 @@ app.put('/api/pool/mode', requireAdmin, (req, res) => {
   }
   poolMode = mode;
   mergePool();
+  saveMetadataCache();
   res.json({ success: true, mode, totalInPool: playlistCache.bar.length });
 });
 
@@ -1539,11 +1845,80 @@ app.put('/api/pool/ratio', requireAdmin, (req, res) => {
   }
   artistDiscoveryRatio = ratio;
   mergePool();
+  saveMetadataCache();
   res.json({ success: true, artistDiscoveryRatio, totalInPool: playlistCache.bar.length });
 });
 
 app.get('/api/pool/moods', requireAdmin, (req, res) => {
   res.json(AVAILABLE_MOODS.map(m => ({ ...m, active: activeMoodIds.has(m.id) })));
+});
+
+app.post('/api/pool/moods/rebuild/custom', requireAdmin, async (req, res) => {
+  const { prompt } = req.body;
+  if (!prompt) return res.status(400).json({ error: 'Prompt required' });
+
+  // 1. Clear existing mood state to make room for custom vibe
+  activeMoodIds.clear();
+  moodPoolCache.clear();
+  
+  // 2. Define a "virtual" custom mood for tracking
+  const customMoodId = 'custom_vibe';
+  
+  // 3. Trigger building
+  console.log(`✨ AI-DJ: Building pool from CUSTOM PROMPT: "${prompt}"`);
+  res.json({ success: true, message: 'Custom build started' });
+
+  // Run in background
+  try {
+    discoveryProgress = { active: true, current: 0, target: 50, moodName: 'Custom Vibe' };
+    broadcast();
+
+    // Create a virtual mood object for refill support
+    const virtualMood = { id: customMoodId, name: 'Custom Vibe', description: prompt };
+    // Temporarily add to AVAILABLE_MOODS so refill can find the description
+    if (!AVAILABLE_MOODS.find(m => m.id === customMoodId)) {
+      AVAILABLE_MOODS.push(virtualMood);
+    } else {
+      // Update description if it already exists
+      const existing = AVAILABLE_MOODS.find(m => m.id === customMoodId);
+      existing.description = prompt;
+    }
+
+    const fullPrompt = `You are a world-class DJ and music curator. \nUSER REQUEST: ${prompt}`;
+    const suggestions = await generateTracksWithGemini(fullPrompt, customMoodId);
+    
+    if (suggestions.length > 0) {
+      const moodCollected = [];
+      const seenLocal = new Set();
+      let moodAdded = 0;
+
+      for (const s of suggestions) {
+        if (moodAdded >= 50) break;
+        const winner = await findBestYouTubeMatch(s);
+        if (winner && !seenLocal.has(winner.id)) {
+          const track = mapVideoItemToTrack(winner);
+          if (isValidSongDuration(track.duration) && isPoolEligible(track)) {
+            seenLocal.add(track.trackId);
+            moodCollected.push({ ...track, source: 'moods' });
+            moodAdded++;
+            discoveryProgress.current = moodAdded;
+            
+            // Real-time updates
+            moodPoolCache.set(customMoodId, moodCollected);
+            activeMoodIds.add(customMoodId); // keep track of this for refills
+            mergePool();
+            broadcast();
+          }
+        }
+        await new Promise(r => setTimeout(r, 200));
+      }
+    }
+  } catch (err) {
+    console.error('Custom prompt build failed:', err.message);
+  } finally {
+    discoveryProgress = { active: false, current: 0, target: 0, moodName: '' };
+    broadcast();
+  }
 });
 
 app.put('/api/pool/moods/:id', requireAdmin, async (req, res) => {
@@ -1553,16 +1928,95 @@ app.put('/api/pool/moods/:id', requireAdmin, async (req, res) => {
   const { active } = req.body;
   if (active) activeMoodIds.add(id);
   else activeMoodIds.delete(id);
-  
+
   // Reset smart pool on mood change to prevent genre bleed
-  poolSources.smart = []; 
-  
-  await buildCacheFromMoods();
+  poolSources.smart = [];
+
+  // We no longer buildCacheFromMoods automatically. 
+  // User must click "Populate" in Admin UI.
   mergePool();
+  saveMetadataCache();
   res.json({ success: true, moodId: id, active, totalInPool: playlistCache.bar.length });
 });
 
-app.post('/api/pool/csv', requireAdmin, (req, res) => {
+app.post('/api/pool/moods/populate', requireAdmin, async (req, res) => {
+  if (activeMoodIds.size === 0) return res.status(400).json({ error: 'No moods selected' });
+
+  const selectedMoods = Array.from(activeMoodIds).map(id => AVAILABLE_MOODS.find(m => m.id === id)).filter(Boolean);
+  const moodNames = selectedMoods.map(m => m.name).join(' + ');
+  const moodDescriptions = selectedMoods.map(m => m.description).filter(Boolean).join('\n');
+
+  console.log(`✨ AI-DJ: Populating BLENDED mood pool for: ${moodNames}...`);
+  res.json({ success: true, message: `Starting build for ${moodNames}` });
+
+  try {
+    const TARGET_COUNT = 50;
+    discoveryProgress = { active: true, current: 0, target: TARGET_COUNT, moodName: moodNames };
+    broadcast();
+
+    // 1. Generate blended prompt
+    let prompt = `You are a world-class DJ and curator for a trendy bar. \nI need a cohesive, blended set of tracks that perfectly combines these vibes: \n\n${moodNames}`;
+    if (moodDescriptions) prompt += `\n\nSpecific vibe details:\n${moodDescriptions}`;
+    prompt += `\n\nGive me ${TARGET_COUNT + 10} high-quality, essential tracks that bridge these moods naturally. Ensure variety but keep the flow perfect for a bar.`;
+
+    // 2. Fetch suggestions
+    // Use the first mood ID as a context anchor for blacklist, or null
+    const contextId = selectedMoods.length === 1 ? selectedMoods[0].id : null;
+    const suggestions = await generateTracksWithGemini(prompt, contextId);
+
+    if (suggestions.length > 0) {
+      const blendedTracks = [];
+      const seenLocal = new Set();
+      let moodAdded = 0;
+
+      for (const s of suggestions) {
+        if (moodAdded >= TARGET_COUNT) break;
+        const winner = await findBestYouTubeMatch(s);
+        if (winner && !seenLocal.has(winner.id)) {
+          const track = mapVideoItemToTrack(winner);
+          if (isValidSongDuration(track.duration) && isPoolEligible(track)) {
+            seenLocal.add(track.trackId);
+
+            const enrichedTrack = { 
+              ...track, 
+              source: 'moods',
+              bpm: s.bpm || null,
+              mood_party: s.energy || null,
+              danceability: s.danceability || null,
+              valence: s.valence || null,
+              key: s.musical_key || null,
+              aiGenerated: true
+            };
+
+            blendedTracks.push(enrichedTrack);
+            moodAdded++;
+            discoveryProgress.current = moodAdded;
+
+            // For blended moods, we store them in ALL active mood caches 
+            // to ensure they show up in mergePool correctly.
+            // OR we can clear and just populate the first one - but blending
+            // usually means "activeMoodIds" represents the current set.
+            for (const mood of selectedMoods) {
+               // We could split them, but for now, let's share the blended pool
+               // across all active IDs so the UI reflects "active" status.
+               moodPoolCache.set(mood.id, blendedTracks);
+            }
+
+            mergePool();
+            broadcast();
+          }
+        }
+        await new Promise(r => setTimeout(r, 200));
+      }
+    }
+  } catch (err) {
+    console.error('Mood population failed:', err.message);
+  } finally {
+    discoveryProgress = { active: false, current: 0, target: 0, moodName: '' };
+    saveMetadataCache();
+    broadcast();
+  }
+});app.post('/api/pool/csv', requireAdmin, (req, res) => {
   const { name, csv } = req.body;
   if (!name || !csv) return res.status(400).json({ error: 'name and csv required' });
   if (csvPlaylists.find(p => p.name === name)) {
@@ -1678,6 +2132,7 @@ app.post('/api/pool/artists', requireAdmin, async (req, res) => {
     artistSeeds.push({ channelId: artistId, artistName, thumbnail: thumbnail || null, limit: songLimit });
     await buildCacheFromArtists();
     mergePool();
+    saveMetadataCache();
     res.json({ success: true, artistId, artistName, totalInPool: playlistCache.bar.length });
   } catch (err) {
     console.error('Add artist seed error:', err.message);
@@ -1692,6 +2147,7 @@ app.delete('/api/pool/artists/:artistId', requireAdmin, async (req, res) => {
   if (artistSeeds.length === before) return res.status(404).json({ error: 'Artist seed not found' });
   await buildCacheFromArtists();
   mergePool();
+  saveMetadataCache();
   res.json({ success: true, totalInPool: playlistCache.bar.length });
 });
 
@@ -1745,12 +2201,10 @@ app.delete('/api/pool/tracks/:trackId', requireAdmin, (req, res) => {
 app.delete('/api/pool/cache/:trackId', requireAdmin, (req, res) => {
   const { trackId } = req.params;
   const before = playlistCache.bar.length;
-  playlistCache.bar     = playlistCache.bar.filter(t => t.trackId !== trackId);
-  poolSources.genre     = poolSources.genre.filter(t => t.trackId !== trackId);
-  poolSources.charts    = poolSources.charts.filter(t => t.trackId !== trackId);
-  poolSources.moods     = poolSources.moods.filter(t => t.trackId !== trackId);
-  poolSources.artist    = poolSources.artist.filter(t => t.trackId !== trackId);
-  poolSources.pinned    = poolSources.pinned.filter(t => t.trackId !== trackId);
+  
+  // Use markTrackAsPlayed with manual=true to trigger the blacklist
+  markTrackAsPlayed(trackId, true);
+  
   if (playlistCache.bar.length === before) return res.status(404).json({ error: 'Track not in pool' });
   res.json({ success: true, totalInPool: playlistCache.bar.length });
 });
@@ -1797,9 +2251,13 @@ app.post('/api/vote/:id', (req, res) => {
 
 // ─── Admin: Remove Song ───────────────────────────────────────────────────────
 app.delete('/api/queue/:id', requireAdmin, async (req, res) => {
-  const before = queue.length;
+  const item = queue.find(i => i.id === req.params.id);
+  if (!item) return res.status(404).json({ error: 'Not found' });
+  
   queue = queue.filter(i => i.id !== req.params.id);
-  if (queue.length === before) return res.status(404).json({ error: 'Not found' });
+  // Manual remove from queue = add to blacklist
+  markTrackAsPlayed(item, true);
+  
   await ensureQueueHasUpcomingTrack();
   broadcast();
   res.json({ success: true });
@@ -1939,13 +2397,14 @@ const HOST = process.env.HOST || '0.0.0.0';
 server.listen(PORT, HOST, async () => {
   console.log(`🎵 Jukebox server running → http://${HOST}:${PORT}`);
   loadMetadataCache();
+  loadMoodBlacklist();
   await startYTMusicService();
   rebuildPool().catch(err => console.warn('Startup pool build failed:', err.message));
 
-  // Every 10 minutes, hunt for new tracks based on the current vibe
+  // Every 10 minutes, hunt for new tracks based on the current vibe - SKIP GEMINI
   setInterval(() => {
-    console.log('🕒 Scheduled Smart Discovery running...');
-    fetchSmartDiscovery().catch(() => {});
+    console.log('🕒 Scheduled Smart Discovery running (skipping AI vetting)...');
+    fetchSmartDiscovery(null, 1, true).catch(() => {});
   }, 10 * 60 * 1000);
 });
 

@@ -235,14 +235,6 @@
   .playlist-item { display: flex; align-items: center; justify-content: space-between; background: var(--surface2); padding: 12px 14px; border-radius: 10px; }
   .playlist-item .pname { font-size: 14px; font-weight: 600; }
   .playlist-item .pcount { font-size: 12px; color: var(--muted); margin-top: 2px; }
-  .spotify-playlist-browser { margin-top: 14px; }
-  .spotify-playlist-item { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 10px; transition: background 0.1s; }
-  .spotify-playlist-item:hover { background: var(--surface2); }
-  .spotify-playlist-item img { width: 44px; height: 44px; border-radius: 6px; object-fit: cover; background: #333; flex-shrink: 0; }
-  .spotify-playlist-item .sp-info { flex: 1; min-width: 0; }
-  .spotify-playlist-item .sp-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .spotify-playlist-item .sp-meta { font-size: 11px; color: var(--muted); }
-  .sp-imported { font-size: 11px; color: var(--accent); font-weight: 600; padding: 4px 10px; }
   .pool-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
   .pool-section { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 20px; }
   .pool-section h3 { font-size: 14px; font-weight: 600; margin-bottom: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; }
@@ -513,9 +505,24 @@
 
         <!-- Moods & Genres -->
         <div style="margin-bottom:24px">
-          <div style="font-size:13px;font-weight:600;margin-bottom:4px">Moods & Genres</div>
-          <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Pick the vibe — each pulls from a curated YouTube Music playlist. Changes take effect immediately.</p>
-          <div class="mood-grid" id="moodGrid"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div style="font-size:13px;font-weight:600">AI DJ: Vibe Selection</div>
+          </div>
+          
+          <!-- Custom Prompt Box -->
+          <div style="margin-bottom:16px; background: var(--surface2); padding: 12px; border-radius: 10px; border: 1px solid var(--border);">
+            <div style="font-size:11px; color:var(--muted); margin-bottom:8px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700;">Custom Vibe Prompt</div>
+            <textarea id="customPromptInput" class="textarea" style="min-height:60px; margin-bottom:10px; background: var(--bg); border-color: var(--border);" placeholder="e.g. 90s Deep House with soulful female vocals, high energy..."></textarea>
+            <button class="btn btn-primary" id="customPopulateBtn" onclick="buildCustomPool()" style="width:100%; display:flex; justify-content:center; align-items:center; gap:8px;">
+              <span>✨ Build Custom Pool</span>
+            </button>
+          </div>
+
+          <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Or pick preset vibes from below and populate them:</p>
+          <div class="mood-grid" id="moodGrid" style="margin-bottom:12px"></div>
+          <button class="btn btn-primary" id="populateMoodBtn" onclick="populateMoodPool()" style="width:100%; display:flex; justify-content:center; align-items:center; gap:8px; background: #6366f1; border-color: #4f46e5;">
+            <span>✨ Populate AI Mood Pool</span>
+          </button>
         </div>
 
         <!-- Discovery Progress Bar -->
@@ -832,6 +839,58 @@
     await loadPool();
   }
 
+  async function populateMoodPool() {
+    const activeMoodBtns = document.querySelectorAll('.mood-btn.active');
+    if (activeMoodBtns.length === 0) return alert('Please select at least one mood first!');
+    
+    const btn = document.getElementById('populateMoodBtn');
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span>🤖 DJ is curating...</span>';
+
+    try {
+      const res = await fetch('/api/pool/moods/populate', {
+        method: 'POST',
+        headers: { 'x-admin-password': adminPassword }
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Population failed');
+      }
+      // UI will update via Socket.io progress events
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = originalText;
+    }
+  }
+
+  async function buildCustomPool() {
+    const prompt = document.getElementById('customPromptInput').value.trim();
+    if (!prompt) return alert('Please enter a vibe prompt first!');
+    
+    const btn = document.getElementById('customPopulateBtn');
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span>🤖 DJ is thinking...</span>';
+
+    try {
+      const res = await fetch('/api/pool/moods/rebuild/custom', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+        body: JSON.stringify({ prompt })
+      });
+      if (!res.ok) throw new Error('Build failed');
+      await loadPool();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = originalText;
+    }
+  }
+
   function updateRatioLabel(value) {
     const v = parseInt(value);
     const label = document.getElementById('ratioLabel');
@@ -927,7 +986,8 @@
       { id: 'organichouse', name: 'Organic House', emoji: '🌅' },
       { id: 'afrohouse',    name: 'Afro House',    emoji: '🥁' },
       { id: 'jackinhouse',   name: 'Jackin\' House',  emoji: '📼' },
-      { id: 'croatiantrash', name: 'Croatian Trash', emoji: '🇭🇷' },
+      { id: 'croatianeurodance', name: 'Croatian Eurodance', emoji: '🕺' },
+      { id: 'croatiantrash', name: 'Croatian Treš', emoji: '🇭🇷' },
     ];
     document.getElementById('moodGrid').innerHTML = MOODS.map(m => `
       <button class="mood-btn${activeMoods.has(m.id) ? ' active' : ''}" data-mood-id="${m.id}" onclick="toggleMood('${m.id}')">

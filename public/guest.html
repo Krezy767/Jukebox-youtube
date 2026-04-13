@@ -1696,7 +1696,7 @@
       const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
       if (res.status === 401) {
         const data = await res.json();
-        searchResults.innerHTML = `<div class="section"><div class="empty-state"><div class="icon">🔌</div><h3>Spotify not connected</h3><p>${data.error || 'The jukebox host needs to connect Spotify Premium on the Host page.'}</p></div></div>`;
+        searchResults.innerHTML = `<div class="section"><div class="empty-state"><div class="icon">⚠️</div><h3>Search not available</h3><p>${data.error || 'Please check your connection or try again later.'}</p></div></div>`;
         return;
       }
       if (!res.ok) {
@@ -2136,7 +2136,7 @@
       const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
       if (res.status === 401) {
         const data = await res.json();
-        results.innerHTML = `<div class="empty-state"><div class="icon">🔌</div><h3>Spotify not connected</h3><p>${data.error || 'The host needs to connect Spotify Premium.'}</p></div>`;
+        results.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><h3>Search not available</h3><p>${data.error || 'Please check your connection or try again later.'}</p></div>`;
         return;
       }
       if (!res.ok) {

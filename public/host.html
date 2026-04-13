@@ -367,9 +367,34 @@
     }
   }
 
-  function onYTError(event) {
+  async function onYTError(event) {
     log(`YouTube player error: ${event.data}`);
     setDebugResult(`yt error ${event.data}`);
+    
+    // 150/101 = Playback in restricted/embedded disabled
+    if ([101, 150].includes(event.data) && actualTrack?.trackId) {
+      log(`Attempting to resolve alternate for: ${actualTrack.title}`);
+      try {
+        const res = await fetch('/api/resolve-alternate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            trackId: actualTrack.trackId,
+            title:   actualTrack.title,
+            artist:  actualTrack.artist
+          })
+        });
+        if (res.ok) {
+          const { trackId } = await res.json();
+          log(`Playing alternate: ${trackId}`);
+          ytPlay({ ...actualTrack, trackId });
+          return;
+        }
+      } catch (err) {
+        log(`Resolve failed: ${err.message}`);
+      }
+    }
+
     if ([100, 101, 150].includes(event.data)) {
       log('Video unavailable — requesting next track');
       requestNextTrack();
