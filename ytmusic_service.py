@@ -10,9 +10,11 @@ Usage: python3 ytmusic_service.py [port]   (default 5001)
 import sys
 import json
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 from ytmusicapi import YTMusic
 
 app = Flask(__name__)
+CORS(app) # Enable CORS for all routes
 ytmusic = YTMusic()  # unauthenticated — read-only search/browse is fine
 
 
@@ -62,10 +64,13 @@ def health():
 def search_songs():
     q = request.args.get('q', '').strip()
     limit = min(int(request.args.get('limit', 20)), 50)
+    filter_type = request.args.get('filter', 'songs')  # 'songs' or 'videos'
+    if filter_type not in ('songs', 'videos'):
+        filter_type = 'songs'
     if not q:
         return jsonify({'error': 'Query required'}), 400
     try:
-        results = ytmusic.search(q, filter='songs', limit=limit)
+        results = ytmusic.search(q, filter=filter_type, limit=limit)
         songs = [format_song(r) for r in results if r.get('videoId')]
         return jsonify(songs)
     except Exception as e:

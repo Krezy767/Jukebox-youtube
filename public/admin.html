@@ -328,7 +328,7 @@
     <div class="nav-item" onclick="showPage('pool', this); loadPool()">🎵 Song Pool</div>
     <div class="nav-item" onclick="showPage('settings', this)">⚙️ Settings</div>
     <hr class="sidebar-divider">
-    <a href="/host.html" target="_blank" style="text-decoration:none">
+    <a href="/player.html" target="_blank" style="text-decoration:none">
       <div class="nav-item">🎧 Host Player ↗</div>
     </a>
     <a href="/guest.html" target="_blank" style="text-decoration:none">
@@ -466,7 +466,30 @@
       <div class="pool-section" id="discoveryPoolSection">
         <div class="pool-section-label discovery-label">Discovery Pool</div>
 
+        <!-- AI DJ Narrator Toggle -->
+        <div style="margin-bottom:12px; display: flex; justify-content: space-between; align-items: center; background: var(--surface2); padding: 12px; border-radius: 10px; border: 2px solid var(--accent); box-shadow: 0 0 15px rgba(99, 102, 241, 0.1);">
+          <div>
+            <div style="font-size:13px; font-weight:600; margin-bottom:2px">🎤 Live AI DJ Narrator</div>
+            <div style="font-size:11px; color:var(--muted)">Gemini 3.1 Live: Real-time track intros & banter</div>
+            <select id="aiDjVoiceSelect" onchange="updateAiDjSettings()" style="margin-top:8px; font-size:11px; background:var(--bg); color:white; border:1px solid var(--border); border-radius:4px; padding:2px 6px">
+              <option value="Puck">Puck (Playful Male - High Energy)</option>
+              <option value="Orus">Orus (Energetic Male - Radio Vibe)</option>
+              <option value="Charon">Charon (Deep Male - Authoritative)</option>
+              <option value="Fenrir">Fenrir (Rugged Male - Steady)</option>
+              <option value="Kore">Kore (Bright Female - Standard)</option>
+              <option value="Aoede">Aoede (Clear Female - Balanced)</option>
+              <option value="Leda">Leda (Calm Female - Soothing)</option>
+              <option value="Zephyr">Zephyr (Soft/Neutral - Airy)</option>
+            </select>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="aiDjToggle" onchange="updateAiDjSettings()">
+            <span class="slider round"></span>
+          </label>
+        </div>
+
         <!-- Smart Discovery Toggle -->
+
         <div style="margin-bottom:12px; display: flex; justify-content: space-between; align-items: center; background: var(--surface2); padding: 12px; border-radius: 10px; border: 1px solid var(--border);">
           <div>
             <div style="font-size:13px; font-weight:600; margin-bottom:2px">Smart-Fill Discovery</div>
@@ -583,7 +606,7 @@
             <div class="setting-label">Host player</div>
             <div class="setting-desc">Open the YouTube player page (keep open on your bar device)</div>
           </div>
-          <a href="/host.html" target="_blank"><button class="btn btn-primary">Open Host Player</button></a>
+          <a href="/player.html" target="_blank"><button class="btn btn-primary">Open Host Player</button></a>
         </div>
       </div>
 
@@ -678,8 +701,8 @@
       document.getElementById('connDot').classList.remove('live');
       document.getElementById('connLabel').textContent = 'Disconnected';
     });
-    socket.on('queueUpdate', ({ queue, currentTrack, targetTrack }) => {
-      renderAll(queue, currentTrack, targetTrack);
+    socket.on('queueUpdate', ({ queue, currentTrack, targetTrack, aiDjEnabled, aiDjVoice }) => {
+      renderAll(queue, currentTrack, targetTrack, aiDjEnabled, aiDjVoice);
       lastSyncTime = Date.now();
     });
     socket.on('poolUpdate', () => {
@@ -691,7 +714,7 @@
       try {
         const res = await fetch('/api/queue');
         const data = await res.json();
-        renderAll(data.queue, data.currentTrack, data.targetTrack);
+        renderAll(data.queue, data.currentTrack, data.targetTrack, data.aiDjEnabled, data.aiDjVoice);
       } catch (e) {
         // Silent fail
       }
@@ -707,7 +730,15 @@
   }
 
   // ─── Render ──────────────────────────────────────────────────────────────
-  function renderAll(queue, currentTrack, targetTrack) {
+  function renderAll(queue, currentTrack, targetTrack, aiDjEnabled, aiDjVoice) {
+    // Sync AI DJ toggles if they come in via socket
+    if (typeof aiDjEnabled !== 'undefined') {
+      document.getElementById('aiDjToggle').checked = aiDjEnabled;
+    }
+    if (aiDjVoice) {
+      document.getElementById('aiDjVoiceSelect').value = aiDjVoice;
+    }
+
     const displayTrack = targetTrack || currentTrack;
     const switching = !!(targetTrack && currentTrack && targetTrack.trackId !== currentTrack.trackId);
 
@@ -917,6 +948,17 @@
     await loadPool();
   }
 
+  async function updateAiDjSettings() {
+    const enabled = document.getElementById('aiDjToggle').checked;
+    const voice = document.getElementById('aiDjVoiceSelect').value;
+    await fetch('/api/settings/aidj', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+      body: JSON.stringify({ enabled, voice })
+    });
+    // server broadcasts via socket, so no need for immediate loadPool unless we want to refresh UI stats
+  }
+
   async function toggleRollingDiscovery(enabled) {
     await fetch('/api/pool/rolling', {
       method: 'PUT',
@@ -927,6 +969,14 @@
   }
 
   function renderPool(data) {
+    // AI DJ Settings
+    if (typeof data.aiDjEnabled !== 'undefined') {
+      document.getElementById('aiDjToggle').checked = data.aiDjEnabled;
+    }
+    if (data.aiDjVoice) {
+      document.getElementById('aiDjVoiceSelect').value = data.aiDjVoice;
+    }
+
     // Mode buttons
     document.querySelectorAll('.mode-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.mode === data.mode);

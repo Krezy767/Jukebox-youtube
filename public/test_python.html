@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jukebox Python Microservice Tester</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --surface: #1e293b;
+            --accent: #ef4444;
+            --text: #f8fafc;
+            --muted: #94a3b8;
+            --border: #334155;
+            --atv-color: #22c55e;
+            --video-color: #3b82f6;
+        }
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 900px;
+        }
+        h1 { margin-bottom: 8px; color: var(--accent); }
+        p { color: var(--muted); margin-bottom: 24px; font-size: 14px; }
+        
+        .search-box {
+            background: var(--surface);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        input {
+            flex: 1;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            color: white;
+            font-size: 16px;
+        }
+        button {
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 0 24px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        button:hover { opacity: 0.9; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding: 0 4px;
+        }
+        .badge {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+        .badge-atv { background: rgba(34, 197, 94, 0.2); color: var(--atv-color); border: 1px solid var(--atv-color); }
+        .badge-video { background: rgba(59, 130, 246, 0.2); color: var(--video-color); border: 1px solid var(--video-color); }
+
+        .track-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            transition: border-color 0.2s;
+        }
+        .track-card:hover { border-color: var(--muted); }
+        .track-card img {
+            width: 60px;
+            height: 60px;
+            border-radius: 6px;
+            object-fit: cover;
+            background: #000;
+        }
+        .track-info { flex: 1; min-width: 0; }
+        .track-title { font-weight: 600; font-size: 16px; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .track-artist { font-size: 14px; color: var(--muted); }
+        .track-meta { font-size: 12px; color: var(--muted); margin-top: 6px; display: flex; gap: 12px; }
+        
+        .id-copy {
+            font-family: monospace;
+            background: var(--bg);
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .id-copy:hover { color: white; background: #334155; }
+
+        .loader {
+            display: none;
+            text-align: center;
+            padding: 40px;
+            color: var(--muted);
+        }
+        #error-msg {
+            color: #ef4444;
+            background: rgba(239, 68, 68, 0.1);
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Python Service Inspector</h1>
+    <p>Debug the <code>ytmusic_service.py</code> results directly. Verify that "ATV" (Topic Channel) versions are being returned.</p>
+
+    <div id="error-msg"></div>
+
+    <div class="search-box">
+        <input type="text" id="query" placeholder="Enter Artist and Song Name..." onkeypress="if(event.key==='Enter') performSearch()">
+        <button id="searchBtn" onclick="performSearch()">Test Search</button>
+    </div>
+
+    <div class="results-header">
+        <div id="results-count" style="font-size: 14px; font-weight: 600;"></div>
+        <div style="font-size: 12px; color: var(--muted);">Port: 5001</div>
+    </div>
+
+    <div id="loader" class="loader">Querying Python microservice...</div>
+    <div id="results-list"></div>
+</div>
+
+<script>
+    async function performSearch() {
+        const query = document.getElementById('query').value.trim();
+        if (!query) return;
+
+        const btn = document.getElementById('searchBtn');
+        const loader = document.getElementById('loader');
+        const list = document.getElementById('results-list');
+        const error = document.getElementById('error-msg');
+        const count = document.getElementById('results-count');
+
+        btn.disabled = true;
+        loader.style.display = 'block';
+        list.innerHTML = '';
+        error.style.display = 'none';
+        count.textContent = '';
+
+        try {
+            // Note: In local dev, we proxy through the main server to avoid CORS 
+            // but for this direct debug tool, we go straight to the Python port 5001.
+            // If CORS fails, you might need to use the server-side proxy route.
+            const response = await fetch(`http://localhost:5001/search/songs?q=${encodeURIComponent(query)}&limit=20`);
+            
+            if (!response.ok) {
+                throw new Error(`Python service returned ${response.status}: ${await response.text()}`);
+            }
+
+            const tracks = await response.json();
+            
+            loader.style.display = 'none';
+            btn.disabled = false;
+            count.textContent = `Found ${tracks.length} results`;
+
+            if (tracks.length === 0) {
+                list.innerHTML = '<div style="text-align:center; padding:40px; color:var(--muted);">No results found.</div>';
+                return;
+            }
+
+            list.innerHTML = tracks.map(track => {
+                const isATV = track.videoType === 'MUSIC_VIDEO_TYPE_ATV';
+                const badgeClass = isATV ? 'badge-atv' : 'badge-video';
+                const badgeText = isATV ? 'ATV (Studio Audio)' : (track.videoType || 'Video');
+                
+                return `
+                    <div class="track-card">
+                        <img src="${track.albumArt || ''}" alt="Art">
+                        <div class="track-info">
+                            <div class="track-title">${track.title}</div>
+                            <div class="track-artist">${track.artist}</div>
+                            <div class="track-meta">
+                                <span class="badge ${badgeClass}">${badgeText}</span>
+                                <span>Duration: ${Math.floor(track.duration / 60)}:${(track.duration % 60).toString().padStart(2, '0')}</span>
+                                <span class="id-copy" onclick="copyId('${track.videoId}')" title="Click to copy ID">${track.videoId}</span>
+                            </div>
+                        </div>
+                        <div style="font-size: 10px; color: var(--muted); text-align: right;">
+                           ${track.album ? 'Album: ' + track.album : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+        } catch (err) {
+            loader.style.display = 'none';
+            btn.disabled = false;
+            error.textContent = `Error: ${err.message}. (Ensure the Python service is running on port 5001)`;
+            error.style.display = 'block';
+        }
+    }
+
+    function copyId(id) {
+        navigator.clipboard.writeText(id);
+        alert(`Copied ID: ${id}`);
+    }
+</script>
+
+</body>
+</html>

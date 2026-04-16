@@ -191,8 +191,31 @@
     word-break: break-word;
     color: var(--text);
   }
-  /* Hidden YouTube IFrame players (A = active, B = standby, roles swap each crossfade) */
-  #yt-player-a, #yt-player-b { position: fixed; bottom: -10px; left: -10px; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  
+  /* Visible player stage for maximum compatibility */
+  #player-stage {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #000;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    position: relative;
+  }
+  #yt-player-a, #yt-player-b { 
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%; 
+    height: 100%; 
+    opacity: 0;
+    pointer-events: none;
+  }
+  #yt-player-a.active, #yt-player-b.active { 
+    opacity: 1; 
+    pointer-events: auto;
+  }
 </style>
 </head>
 <body>
@@ -200,6 +223,11 @@
   <div class="logo">🎧</div>
   <h1>Host Player</h1>
   <p class="sub">Keep this page open on your bar device</p>
+
+  <div id="player-stage">
+    <div id="yt-player-a"></div>
+    <div id="yt-player-b"></div>
+  </div>
 
   <div class="now-playing" id="nowPlaying">
     <img id="npArt" src="" alt="">
@@ -293,10 +321,6 @@
   </div>
 </div>
 
-<!-- Two hidden YouTube IFrame players for crossfade -->
-<div id="yt-player-a"></div>
-<div id="yt-player-b"></div>
-
 <script>
   // ─── YouTube IFrame Players (A & B — swap roles each crossfade) ───────────
   let playerA = null;
@@ -310,8 +334,12 @@
   window.onYouTubeIframeAPIReady = function() {
     function makeConfig(id, onReady) {
       return {
-        height: '1', width: '1',
-        playerVars: { autoplay: 0, controls: 0, disablekb: 1, fs: 0, rel: 0, vq: 'hd1080' },
+        height: '100%', width: '100%',
+        playerVars: { 
+          autoplay: 1, 
+          controls: 1, 
+          origin: window.location.origin 
+        },
         events: {
           onReady,
           onStateChange(e) {
@@ -323,8 +351,9 @@
             if (activePlayer === thisPlayer) {
               onYTError(e);
             } else if (standbyPlayer === thisPlayer) {
-              log(`Standby load error ${e.data} — skipping preload`);
-              standbyPreloadedTrackId = null;
+              log(`Standby load error ${e.data} for "${upcomingTrack?.title}" — resolving alternate before crossfade`);
+              standbyPreloadedTrackId = 'RESOLVING';
+              resolveStandbyAlternate(upcomingTrack, e.data);
             }
           },
         },
@@ -343,6 +372,10 @@
   function onBothPlayersReady() {
     activePlayer  = playerA;
     standbyPlayer = playerB;
+    
+    document.getElementById('yt-player-a').classList.add('active');
+    document.getElementById('yt-player-b').classList.remove('active');
+    
     ytPlayerReady = true;
     setStatus('playerLabel', 'playerDot', 'ok', 'YouTube player ready ✓');
     log('YouTube players ready (crossfade enabled)');
@@ -362,6 +395,12 @@
       const position = (activePlayer.getCurrentTime() || 0) * 1000;
       setPlaybackDeadline(actualTrack?.trackId, position, duration);
       document.getElementById('playPauseBtn').textContent = '⏸ Pause';
+      
+      // Ensure active player is visible
+      const activeId = activePlayer === playerA ? 'yt-player-a' : 'yt-player-b';
+      const standbyId = activePlayer === playerA ? 'yt-player-b' : 'yt-player-a';
+      document.getElementById(activeId).classList.add('active');
+      document.getElementById(standbyId).classList.remove('active');
     } else if (state === YT.PlayerState.PAUSED) {
       document.getElementById('playPauseBtn').textContent = '▶ Play';
     }
@@ -370,8 +409,8 @@
   async function onYTError(event) {
     log(`YouTube player error: ${event.data}`);
     setDebugResult(`yt error ${event.data}`);
-    
-    // 150/101 = Playback in restricted/embedded disabled
+
+    // 101/150 = embedded playback restricted — try an alternate video ID first
     if ([101, 150].includes(event.data) && actualTrack?.trackId) {
       log(`Attempting to resolve alternate for: ${actualTrack.title}`);
       try {
@@ -379,38 +418,91 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            trackId: actualTrack.trackId,
-            title:   actualTrack.title,
-            artist:  actualTrack.artist
-          })
+            trackId:   actualTrack.trackId,
+            title:     actualTrack.title,
+            artist:    actualTrack.artist,
+            failedIds: failedAlternateIds,
+          }),
         });
         if (res.ok) {
           const { trackId } = await res.json();
           log(`Playing alternate: ${trackId}`);
           ytPlay({ ...actualTrack, trackId });
-          return;
+          return; // don't fall through to requestNextTrack
         }
       } catch (err) {
         log(`Resolve failed: ${err.message}`);
       }
     }
 
+    // No alternate found or error code 100 — skip to next track
     if ([100, 101, 150].includes(event.data)) {
       log('Video unavailable — requesting next track');
       requestNextTrack();
     }
   }
 
+  // Called when the standby player fails to load (101/150) before crossfade.
+  // Resolves an alternate immediately so the crossfade can proceed with a good track.
+  async function resolveStandbyAlternate(track, errorCode) {
+    if (!track?.trackId || ![101, 150].includes(errorCode)) {
+      standbyPreloadedTrackId = 'FAILED';
+      return;
+    }
+    try {
+      const res = await fetch('/api/resolve-alternate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          trackId:   track.trackId,
+          title:     track.title,
+          artist:    track.artist,
+          failedIds: [track.trackId],
+        }),
+      });
+      if (res.ok) {
+        const { trackId } = await res.json();
+        log(`Standby alternate found: ${trackId} — preloading`);
+        // Update upcomingTrack so crossfade uses the good ID
+        if (upcomingTrack && upcomingTrack.trackId === track.trackId) {
+          upcomingTrack = { ...upcomingTrack, trackId };
+        }
+        standbyPreloadedTrackId = trackId;
+        setPlayerVolume(standbyPlayer, 0);
+        standbyPlayer.loadVideoById(trackId);
+      } else {
+        log(`Standby resolve-alternate found nothing — will skip track`);
+        standbyPreloadedTrackId = 'FAILED';
+      }
+    } catch (err) {
+      log(`Standby resolve-alternate error: ${err.message}`);
+      standbyPreloadedTrackId = 'FAILED';
+    }
+  }
+
   // Per-player volume helpers (0.0–1.0 scale)
   function setPlayerVolume(p, vol) {
-    try { p?.setVolume(Math.round(Math.max(0, Math.min(1, vol)) * 100)); } catch (_) {}
+    try { 
+      // Multiplies the current logic volume (vol) by the global DJ ducking multiplier
+      const finalVol = vol * djDuckingMultiplier;
+      p?.setVolume(Math.round(Math.max(0, Math.min(1, finalVol)) * 100)); 
+    } catch (_) {}
   }
+
   function getPlayerVolume(p) {
-    try { return (p?.getVolume() ?? 80) / 100; } catch (_) { return NORMAL_VOLUME; }
+    try { return (p?.getVolume() ?? 80) / 100; } catch (_) { return currentBaseVolume; }
   }
-  // Active-player shortcuts so existing call sites keep working
-  function ytSetVolume(vol) { setPlayerVolume(activePlayer, vol); }
-  function ytGetVolume()    { return getPlayerVolume(activePlayer); }
+
+  // User-facing volume (from slider)
+  function ytSetVolume(vol) { 
+    currentBaseVolume = vol;
+    // If NO crossfade is happening, update immediate volume
+    if (!crossfadeInProgress) {
+      setPlayerVolume(activePlayer, vol); 
+    }
+  }
+
+  function ytGetVolume() { return currentBaseVolume; }
 
   // ─── State ────────────────────────────────────────────────────────────────
   let socket;
@@ -445,8 +537,21 @@
   let currentServerTrack = null;
   let targetTrack        = null;
   let upcomingTrack      = null;
+  let failedAlternateIds = [];
+
+  // AI DJ Narrator State
+  let aiDjEnabled = false;
+  let aiDjVoice = 'Zephyr';
+  let geminiApiKey = null;
+  let aiDjWs = null;
+  let audioContext = null;
+  let nextStartTime = 0;
+  let djDuckingMultiplier = 1.0;
+  let djStopDuckingTimer = null;
+  let lastDjIntroForTrackId = null;
 
   const NORMAL_VOLUME         = 0.8;
+  let currentBaseVolume       = NORMAL_VOLUME;
   const CROSSFADE_DURATION_MS = 8000;  // overlap — both songs playing simultaneously
   const PRELOAD_AHEAD_MS      = 12000; // load standby this many ms before end
   const FADE_IN_DURATION_MS   = 3000;  // fade-in when loading a track via ytPlay()
@@ -466,12 +571,12 @@
   function cancelCrossfade(restoreVolume = false) {
     if (crossfadeTimer) { clearInterval(crossfadeTimer); crossfadeTimer = null; }
     crossfadeInProgress = false;
-    if (restoreVolume) setPlayerVolume(activePlayer, NORMAL_VOLUME);
+    if (restoreVolume) setPlayerVolume(activePlayer, currentBaseVolume);
   }
 
   function tryStartFade(position, duration, paused) {
     if (paused || !duration || !actualTrack?.trackId) return;
-    if (actualTrack.trackId !== targetTrack?.trackId) return;
+    // Removed targetTrack check because server clears it after ACK
     if (!upcomingTrack?.trackId) return;
     if (crossfadeInProgress) return;
 
@@ -479,7 +584,10 @@
     if (remaining <= 0) return;
 
     // Phase 1: Pre-load standby player ~12s before end
-    if (remaining <= PRELOAD_AHEAD_MS && standbyPreloadedTrackId !== upcomingTrack.trackId) {
+    if (remaining <= PRELOAD_AHEAD_MS && 
+        standbyPreloadedTrackId !== upcomingTrack.trackId && 
+        standbyPreloadedTrackId !== 'FAILED' && 
+        standbyPreloadedTrackId !== 'RESOLVING') {
       standbyPreloadedTrackId = upcomingTrack.trackId;
       setPlayerVolume(standbyPlayer, 0);
       standbyPlayer.loadVideoById(upcomingTrack.trackId);
@@ -495,11 +603,25 @@
       standbyPlayer.playVideo();
       log(`🎚 Crossfading → "${nextTrack.title}"`);
 
+      // AI DJ Intro Trigger
+      if (aiDjEnabled && lastDjIntroForTrackId !== nextTrack.trackId) {
+        lastDjIntroForTrackId = nextTrack.trackId;
+        
+        let prompt = `Introduce the next song: '${nextTrack.title}' by ${nextTrack.artist}. We just finished '${actualTrack.title}' by ${actualTrack.artist}. Keep it under 8 seconds.`;
+        
+        // Special case: Marko Jack -> Shoutout to Pavo (In Croatian)
+        if (nextTrack.artist && nextTrack.artist.toLowerCase().includes('marko jack')) {
+          prompt = `Posebno najavi sljedeću pjesmu '${nextTrack.title}' od izvođača Marko Jack. NAGLASI da je ovo "premium sadržaj od Marka Jacka" i da ova pjesma ide specijalno za 'jednog i jedinog' Pavu. Šaljivo dodaj da Pavi vjerojatno treba pomoć jer on zapravo 'neironično sluša' ovu glazbu. Budi kreativan, obavezno spomeni Pavu i taj premium sadržaj. Kratka najava na hrvatskom, ispod 8 sekundi.`;
+        }
+        
+        sendAiDjPrompt(prompt);
+      }
+
       const startTime = Date.now();
       crossfadeTimer = setInterval(() => {
         const progress = Math.min(1, (Date.now() - startTime) / CROSSFADE_DURATION_MS);
-        setPlayerVolume(activePlayer,  NORMAL_VOLUME * (1 - progress));
-        setPlayerVolume(standbyPlayer, NORMAL_VOLUME * progress);
+        setPlayerVolume(activePlayer,  currentBaseVolume * (1 - progress));
+        setPlayerVolume(standbyPlayer, currentBaseVolume * progress);
 
         if (progress >= 1) {
           clearInterval(crossfadeTimer);
@@ -513,7 +635,13 @@
           const old     = activePlayer;
           activePlayer  = standbyPlayer;
           standbyPlayer = old;
-          setPlayerVolume(activePlayer, NORMAL_VOLUME);
+          setPlayerVolume(activePlayer, currentBaseVolume);
+          
+          // Visibility swap
+          const activeId = activePlayer === playerA ? 'yt-player-a' : 'yt-player-b';
+          const standbyId = activePlayer === playerA ? 'yt-player-b' : 'yt-player-a';
+          document.getElementById(activeId).classList.add('active');
+          document.getElementById(standbyId).classList.remove('active');
 
           // Update playback state
           actualTrack = {
@@ -605,6 +733,16 @@
   // ─── Playback ─────────────────────────────────────────────────────────────
   async function ytPlay(track, ackOptions = {}) {
     if (!ytPlayerReady || !track?.trackId) return;
+
+    // Reset failed list if this is a brand new song (title/artist mismatch)
+    if (actualTrack?.title !== track.title || actualTrack?.artist !== track.artist) {
+      failedAlternateIds = [];
+    }
+    // Track this ID as failed (if it errors out later, we know not to try it again)
+    if (!failedAlternateIds.includes(track.trackId)) {
+      failedAlternateIds.push(track.trackId);
+    }
+
     if (!audioUnlocked) {
       log('Audio not unlocked — tap "Tap to Start Audio" first');
       return;
@@ -616,7 +754,10 @@
       cancelCrossfade(false);
       standbyPreloadedTrackId = null;
       try { standbyPlayer?.stopVideo(); } catch (_) {}
-      ytSetVolume(0);
+      
+      // Start from silent (don't use ytSetVolume which overwrites base user pref!)
+      setPlayerVolume(activePlayer, 0); 
+
       actualTrack = {
         trackId:  track.trackId,
         title:    track.title,
@@ -624,11 +765,14 @@
         albumArt: track.albumArt,
         isFallback: track.isFallback || false,
       };
-      fadeStartedForTrackId = null;
-      switchDoneForTrackId  = null;
-      pendingNaturalAdvanceTrackId = null;
+      // Visibility: Set active BEFORE loading
+      const activeId = activePlayer === playerA ? 'yt-player-a' : 'yt-player-b';
+      const standbyId = activePlayer === playerA ? 'yt-player-b' : 'yt-player-a';
+      document.getElementById(activeId).classList.add('active');
+      document.getElementById(standbyId).classList.remove('active');
+
       activePlayer.loadVideoById(track.trackId);
-      activePlayer.setPlaybackQuality('hd1080');
+      
       renderNowPlaying(actualTrack);
       renderRequestedTrack();
       log(`Loading: ${track.title} — ${track.artist}`);
@@ -636,7 +780,7 @@
       const fadeStart = Date.now();
       const fadeTimer = setInterval(() => {
         const progress = Math.min(1, (Date.now() - fadeStart) / FADE_IN_DURATION_MS);
-        setPlayerVolume(activePlayer, NORMAL_VOLUME * progress);
+        setPlayerVolume(activePlayer, currentBaseVolume * progress);
         if (progress >= 1) clearInterval(fadeTimer);
       }, FADE_STEP_MS);
       setDebugResult(`loaded ${track.title}`);
@@ -669,7 +813,7 @@
       activePlayer.playVideo();
       await sleep(300);
       activePlayer.pauseVideo();
-      setPlayerVolume(activePlayer, NORMAL_VOLUME);
+      setPlayerVolume(activePlayer, currentBaseVolume);
       audioUnlocked = true;
       document.getElementById('unlockSection').style.display = 'none';
       setStatus('audioLabel', 'audioDot', 'ok', 'Audio unlocked ✓');
@@ -761,22 +905,21 @@
 
   // ─── Server Communication ─────────────────────────────────────────────────
   async function acknowledgeActualTrack(track, options = {}) {
-    const serverAlreadyMatches = currentServerTrack?.trackId === track?.trackId;
-    if (!track?.trackId || (track.trackId === lastAckedTrackId && serverAlreadyMatches)) return;
-    if (!options.naturalAdvance) lastAckedTrackId = track.trackId;
+    if (!track?.trackId) return;
     try {
       await fetch('/api/host/ack', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...track,
-          adoptTarget:    !!options.adoptTarget,
-          naturalAdvance: !!options.naturalAdvance,
+          trackId:  track.trackId,
+          title:    track.title,
+          artist:   track.artist,
+          albumArt: track.albumArt,
+          ...options
         }),
       });
-    } catch (err) {
-      log('Ack failed: ' + err.message);
-    }
+      lastAckedTrackId = track.trackId;
+    } catch (e) { /* ignore */ }
   }
 
   async function requestNextTrack() {
@@ -829,7 +972,138 @@
     log(reason || 'Another host page is active');
   });
 
-  socket.on('queueUpdate', ({ queue, currentTrack, targetTrack: nextTarget }) => {
+  // ─── AI DJ Logic ──────────────────────────────────────────────────────────
+  async function initAudioContext() {
+    if (!audioContext) {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+      nextStartTime = audioContext.currentTime;
+    }
+  }
+
+  function connectAiDj() {
+    if (aiDjWs || !aiDjEnabled || !geminiApiKey) return;
+    
+    log(`🎙 AI DJ: Connecting as ${aiDjVoice}...`);
+    const modelId = 'models/gemini-3.1-flash-live-preview';
+    const URL = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${geminiApiKey}`;
+    
+    aiDjWs = new WebSocket(URL);
+    aiDjWs.binaryType = 'arraybuffer';
+
+    aiDjWs.onopen = () => {
+      log('🎙 AI DJ: Connected');
+      const DJ_INSTRUCTION = "You are a friendly, charismatic local bar DJ. You are smooth, approachable, and clearly love the music. You are primarily English-speaking, but you are fluent in Croatian and can do specific shoutouts in Croatian when requested. DON'T sound like a robot. Keep your announcements energetic but chill, and very short (under 8 seconds). You are the heart of the bar's vibe. Occasionally give a shoutout to the crowd. Always respond in the language of the prompt provided.";
+      
+      const setup = {
+        setup: {
+          model: modelId,
+          generationConfig: {
+            responseModalities: ["AUDIO"],
+            speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: {
+                  voiceName: aiDjVoice
+                }
+              }
+            }
+          },
+          systemInstruction: {
+            parts: [{ text: DJ_INSTRUCTION }]
+          }
+        }
+      };
+      aiDjWs.send(JSON.stringify(setup));
+    };
+
+    aiDjWs.onmessage = async (event) => {
+      try {
+        let data = event.data;
+        if (data instanceof ArrayBuffer) {
+          const decoder = new TextDecoder();
+          data = decoder.decode(data);
+        }
+        const response = JSON.parse(data);
+        const parts = response.serverContent?.modelTurn?.parts || response.server_content?.model_turn?.parts;
+        if (parts) {
+          parts.forEach(p => {
+            const audioData = p.inlineData?.data || p.inline_data?.data;
+            if (audioData) playAudioChunk(audioData);
+          });
+        }
+      } catch (err) { console.error('AI DJ Msg Error:', err); }
+    };
+
+    aiDjWs.onclose = () => {
+      log('🎙 AI DJ: Disconnected');
+      aiDjWs = null;
+      // Auto-reconnect if still enabled
+      if (aiDjEnabled) setTimeout(connectAiDj, 5000);
+    };
+
+    aiDjWs.onerror = () => { console.error('AI DJ WebSocket Error'); };
+  }
+
+  function playAudioChunk(base64Data) {
+    initAudioContext();
+    const binaryString = atob(base64Data);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+    const int16Buffer = new Int16Array(bytes.buffer);
+    const float32Buffer = new Float32Array(int16Buffer.length);
+    for (let i = 0; i < int16Buffer.length; i++) float32Buffer[i] = int16Buffer[i] / 32768.0;
+    const audioBuffer = audioContext.createBuffer(1, float32Buffer.length, 24000);
+    audioBuffer.getChannelData(0).set(float32Buffer);
+    const source = audioContext.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(audioContext.destination);
+    
+    const startTime = Math.max(nextStartTime, audioContext.currentTime);
+    source.start(startTime);
+    nextStartTime = startTime + audioBuffer.duration;
+
+    // Ducking logic
+    setDucking(true);
+    if (djStopDuckingTimer) clearTimeout(djStopDuckingTimer);
+    djStopDuckingTimer = setTimeout(() => {
+      setDucking(false);
+    }, (nextStartTime - audioContext.currentTime) * 1000 + 100);
+  }
+
+  function setDucking(active) {
+    const prev = djDuckingMultiplier;
+    djDuckingMultiplier = active ? 0.3 : 1.0;
+    
+    // Only apply immediately if NO crossfade or fade-in is happening
+    // (If they ARE happening, they'll pick up the new multiplier on their next interval tick)
+    if (prev !== djDuckingMultiplier && !crossfadeInProgress) {
+        setPlayerVolume(activePlayer, currentBaseVolume);
+        setPlayerVolume(standbyPlayer, 0); // standby should always be silent if not crossfading
+    }
+  }
+
+  function sendAiDjPrompt(msg) {
+    if (!aiDjWs || aiDjWs.readyState !== WebSocket.OPEN) return;
+    const payload = { realtimeInput: { text: msg } };
+    aiDjWs.send(JSON.stringify(payload));
+  }
+
+  socket.on('queueUpdate', ({ queue, currentTrack, targetTrack: nextTarget, aiDjEnabled: serverDjEnabled, aiDjVoice: serverDjVoice, geminiApiKey: serverApiKey }) => {
+    // Update DJ Settings
+    const djEnabledChanged = aiDjEnabled !== serverDjEnabled;
+    const djVoiceChanged = aiDjVoice !== serverDjVoice;
+    
+    aiDjEnabled = serverDjEnabled;
+    aiDjVoice = serverDjVoice;
+    geminiApiKey = serverApiKey;
+
+    if (djEnabledChanged || djVoiceChanged) {
+      if (aiDjWs) {
+        aiDjWs.close(); // closing triggers reconnect with new settings
+      } else if (aiDjEnabled) {
+        connectAiDj();
+      }
+    }
+
     renderQueue(queue);
     const prevTargetId = targetTrack?.trackId || null;
     currentServerTrack = currentTrack || null;
@@ -949,7 +1223,7 @@
       log('Volume: ' + Math.round(previousVolume * 100) + '%');
       setDebugResult(`volume ${Math.round(previousVolume * 100)}%`);
     } else {
-      previousVolume = parseFloat(slider.value);
+      previousVolume = currentBaseVolume;
       ytSetVolume(0);
       slider.value = 0;
       isMuted = true;

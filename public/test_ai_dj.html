@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jukebox AI DJ Prototype</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --text: #f8fafc;
+            --accent: #6366f1;
+        }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            background: var(--card);
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            width: 100%;
+            max-width: 500px;
+            text-align: center;
+        }
+        h1 { margin-top: 0; font-size: 1.5rem; color: var(--accent); }
+        .input-group { margin-bottom: 1rem; text-align: left; }
+        label { display: block; font-size: 0.75rem; color: #94a3b8; margin-bottom: 0.25rem; margin-left: 0.5rem; }
+        input, select, textarea {
+            width: 100%;
+            padding: 0.75rem;
+            background: #0f172a;
+            border: 1px solid #334155;
+            color: white;
+            border-radius: 0.5rem;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+        textarea { height: 80px; resize: none; }
+        button {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .secondary-btn { background: #334155; }
+        .danger-btn { background: #ef4444; }
+        .status { margin-top: 1rem; font-size: 0.875rem; color: #94a3b8; font-weight: 500; }
+        .log {
+            margin-top: 1rem;
+            padding: 0.75rem;
+            background: #000;
+            border-radius: 0.5rem;
+            font-family: monospace;
+            font-size: 0.75rem;
+            height: 180px;
+            overflow-y: auto;
+            text-align: left;
+            color: #4ade80;
+            border: 1px solid #1e293b;
+        }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 1rem; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🎧 AI DJ Narrator (v2)</h1>
+    
+    <div class="input-group">
+        <label>GEMINI_API_KEY</label>
+        <input type="password" id="apiKey" placeholder="Paste key here...">
+    </div>
+    
+    <div class="grid">
+        <div class="input-group">
+            <label>API Version</label>
+            <select id="versionSelect">
+                <option value="v1beta">v1beta (Stable)</option>
+                <option value="v1alpha">v1alpha (Preview)</option>
+            </select>
+        </div>
+        <div class="input-group">
+            <label>Model ID</label>
+            <select id="modelSelect">
+                <option value="models/gemini-3.1-flash-live-preview">gemini-3.1-flash-live-preview</option>
+                <option value="models/gemini-2.5-flash-native-audio-latest">gemini-2.5-flash-native-audio-latest</option>
+                <option value="models/gemini-2.0-flash-exp">gemini-2.0-flash-exp</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="grid">
+        <div class="input-group">
+            <label>Voice</label>
+            <select id="voiceSelect">
+                <option value="Zephyr">Zephyr (Smooth/Neutral)</option>
+                <option value="Puck">Puck (Playful Male)</option>
+                <option value="Charon">Charon (Deep/Steady Male)</option>
+                <option value="Orion">Orion (Engaging Male)</option>
+                <option value="Fenrir">Fenrir (Gruff/Resonant Male)</option>
+                <option value="Orus">Orus (Confident Male)</option>
+                <option value="Aoede">Aoede (Expressive Female)</option>
+                <option value="Kore">Kore (Clear/Bright Female)</option>
+                <option value="Leda">Leda (Sophisticated Female)</option>
+                <option value="Lyra">Lyra (Articulate Female)</option>
+                <option value="Hestia">Hestia (Gentle/Soft Female)</option>
+            </select>
+        </div>
+        <div class="input-group">
+            <label>Thinking Level</label>
+            <select id="thinkingSelect">
+                <option value="minimal">Minimal (Fastest)</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="grid">
+        <button id="connectBtn">Connect</button>
+        <button id="listModelsBtn" class="secondary-btn">List Models</button>
+    </div>
+
+    <div class="input-group">
+        <label>DJ Prompt (Banter)</label>
+        <textarea id="promptInput">Introduce the next song: 'Tek je 12 sati' by ET. Mention that we just finished 'Oči Boje Kestena' by Colonia.</textarea>
+    </div>
+
+    <div class="grid">
+        <button id="announceBtn" disabled>🎤 Announce Now</button>
+        <button id="stopBtn" class="danger-btn" disabled>Stop / Reset</button>
+    </div>
+
+    <div class="status" id="status">Status: Disconnected</div>
+    <div class="log" id="log"></div>
+</div>
+
+<script>
+    const logEl = document.getElementById('log');
+    const statusEl = document.getElementById('status');
+    const connectBtn = document.getElementById('connectBtn');
+    const listModelsBtn = document.getElementById('listModelsBtn');
+    const announceBtn = document.getElementById('announceBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const apiKeyInput = document.getElementById('apiKey');
+    const modelSelect = document.getElementById('modelSelect');
+    const versionSelect = document.getElementById('versionSelect');
+    const voiceSelect = document.getElementById('voiceSelect');
+    const thinkingSelect = document.getElementById('thinkingSelect');
+    const promptInput = document.getElementById('promptInput');
+
+    let ws = null;
+    let audioContext;
+    let nextStartTime = 0;
+
+    function log(msg, color = null) {
+        const div = document.createElement('div');
+        div.textContent = `> ${msg}`;
+        if (color) div.style.color = color;
+        logEl.appendChild(div);
+        logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    listModelsBtn.onclick = async () => {
+        const key = apiKeyInput.value.trim();
+        const version = versionSelect.value;
+        if (!key) return alert('Need API Key');
+        log(`Listing models for ${version}...`);
+        try {
+            const res = await fetch(`https://generativelanguage.googleapis.com/${version}/models?key=${key}`);
+            const data = await res.json();
+            if (data.models) {
+                log('--- Live Models ---', '#6366f1');
+                data.models.filter(m => (m.supportedGenerationMethods || []).includes('bidiGenerateContent'))
+                           .forEach(m => log(m.name, '#4ade80'));
+            } else { log(`Error: ${JSON.stringify(data.error || data)}`, '#ef4444'); }
+        } catch (err) { log(`Fetch failed: ${err.message}`, '#ef4444'); }
+    };
+
+    async function initAudio() {
+        if (!audioContext) {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+            nextStartTime = audioContext.currentTime;
+        }
+    }
+
+    connectBtn.onclick = () => {
+        const key = apiKeyInput.value.trim();
+        const modelId = modelSelect.value;
+        const version = versionSelect.value;
+        const voiceId = voiceSelect.value;
+        const thinkingLevel = thinkingSelect.value;
+
+        if (!key) return alert('Need API Key');
+
+        const URL = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.${version}.GenerativeService.BidiGenerateContent?key=${key}`;
+        
+        ws = new WebSocket(URL);
+        ws.binaryType = 'arraybuffer';
+
+        ws.onopen = () => {
+            statusEl.textContent = 'Status: Connected';
+            statusEl.style.color = '#4ade80';
+            connectBtn.disabled = true;
+            announceBtn.disabled = false;
+            stopBtn.disabled = false;
+            log(`Connected to ${modelId} [${voiceId}]`);
+
+            const DJ_INSTRUCTION = "You are a charismatic, smooth-talking bar DJ in Istria. DON'T sound like a robot. Use natural speech patterns, occasional filler words like 'alright', 'yeah', or 'listen up'. Keep your intros high-energy, very short (under 8 seconds), and speak with the vibe of a local hero who loves the music. Mention the bar vibe occasionally.";
+
+            // 3.1 Compat: Use camelCase by default as per docs
+            const setup = {
+                setup: {
+                    model: modelId,
+                    generationConfig: {
+                        responseModalities: ["AUDIO"],
+                        speechConfig: {
+                            voiceConfig: {
+                                prebuiltVoiceConfig: {
+                                    voiceName: voiceId
+                                }
+                            }
+                        },
+                        // 3.1 specific thinking level
+                        thinkingConfig: {
+                            thinkingLevel: thinkingLevel
+                        }
+                    },
+                    systemInstruction: {
+                        parts: [{ text: DJ_INSTRUCTION }]
+                    }
+                }
+            };
+            ws.send(JSON.stringify(setup));
+        };
+
+        ws.onmessage = async (event) => {
+            try {
+                let data = event.data;
+                if (data instanceof ArrayBuffer) {
+                    const decoder = new TextDecoder();
+                    data = decoder.decode(data);
+                }
+                const response = JSON.parse(data);
+                if (response.setupComplete) log('Ready!');
+                
+                const parts = response.serverContent?.modelTurn?.parts || response.server_content?.model_turn?.parts;
+                if (parts) {
+                    parts.forEach(p => {
+                        const audioData = p.inlineData?.data || p.inline_data?.data;
+                        if (audioData) playAudioChunk(audioData);
+                    });
+                }
+            } catch (err) {}
+        };
+
+        ws.onclose = (event) => {
+            statusEl.textContent = 'Status: Disconnected';
+            statusEl.style.color = '#ef4444';
+            connectBtn.disabled = false;
+            announceBtn.disabled = true;
+            stopBtn.disabled = true;
+            log(`Closed: Code ${event.code}`);
+        };
+
+        ws.onerror = (err) => log('Socket Error', '#ef4444');
+    };
+
+    stopBtn.onclick = () => { if (ws) ws.close(); };
+
+    function playAudioChunk(base64Data) {
+        initAudio();
+        const binaryString = atob(base64Data);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+        const int16Buffer = new Int16Array(bytes.buffer);
+        const float32Buffer = new Float32Array(int16Buffer.length);
+        for (let i = 0; i < int16Buffer.length; i++) float32Buffer[i] = int16Buffer[i] / 32768.0;
+        const audioBuffer = audioContext.createBuffer(1, float32Buffer.length, 24000);
+        audioBuffer.getChannelData(0).set(float32Buffer);
+        const source = audioContext.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(audioContext.destination);
+        const startTime = Math.max(nextStartTime, audioContext.currentTime);
+        source.start(startTime);
+        nextStartTime = startTime + audioBuffer.duration;
+    }
+
+    announceBtn.onclick = () => {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        const msg = promptInput.value.trim();
+        const modelId = modelSelect.value;
+        
+        log(`Requesting Intro...`);
+
+        // Gemini 3.1 specific logic based on documentation:
+        // Use realtimeInput { text: "..." } for ongoing text turns in 3.1
+        if (modelId.includes('3.1')) {
+            const payload = {
+                realtimeInput: {
+                    text: msg
+                }
+            };
+            ws.send(JSON.stringify(payload));
+        } else {
+            // 2.0/2.5 logic: clientContent turns
+            const payload = {
+                clientContent: {
+                    turns: [{ role: "user", parts: [{ text: msg }] }],
+                    turnComplete: true
+                }
+            };
+            ws.send(JSON.stringify(payload));
+        }
+    };
+</script>
+
+</body>
+</html>

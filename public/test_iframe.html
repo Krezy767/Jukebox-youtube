@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jukebox IFrame Compatibility Tester</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --surface: #1e293b;
+            --accent: #ef4444;
+            --success: #22c55e;
+            --text: #f8fafc;
+            --muted: #94a3b8;
+            --border: #334155;
+        }
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 900px;
+        }
+        h1 { margin-bottom: 8px; color: var(--accent); }
+        p { color: var(--muted); margin-bottom: 24px; font-size: 14px; }
+        
+        .test-box {
+            background: var(--surface);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        input {
+            flex: 1;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            color: white;
+            font-size: 16px;
+        }
+        button {
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 0 24px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        
+        .player-container {
+            background: #000;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            position: relative;
+        }
+        #yt-player {
+            width: 100%;
+            height: 100%;
+        }
+
+        .status-panel {
+            margin-top: 20px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        .status-card {
+            background: var(--surface);
+            padding: 16px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+        }
+        .status-label { font-size: 11px; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+        .status-value { font-size: 18px; font-weight: 700; }
+        
+        #error-log {
+            margin-top: 20px;
+            background: #450a0a;
+            color: #fca5a5;
+            padding: 16px;
+            border-radius: 10px;
+            border: 1px solid #7f1d1d;
+            display: none;
+            font-family: monospace;
+        }
+        
+        .success-box {
+            margin-top: 20px;
+            background: #064e3b;
+            color: #6ee7b7;
+            padding: 16px;
+            border-radius: 10px;
+            border: 1px solid #065f46;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>IFrame Tester</h1>
+    <p>Test if a YouTube video allows embedding. If it throws <b>Error 150</b> or <b>101</b>, it's restricted and cannot be used in the Jukebox.</p>
+
+    <div class="test-box">
+        <input type="text" id="video-id" placeholder="Enter Video ID or URL (e.g. dQw4w9WgXcQ)" onkeypress="if(event.key==='Enter') loadTest()">
+        <button onclick="loadTest()">Test Player</button>
+    </div>
+
+    <div class="player-container">
+        <div id="yt-player"></div>
+    </div>
+
+    <div class="status-panel">
+        <div class="status-card">
+            <div class="status-label">Current ID</div>
+            <div class="status-value" id="current-id">—</div>
+        </div>
+        <div class="status-card">
+            <div class="status-label">Player State</div>
+            <div class="status-value" id="player-state">Ready</div>
+        </div>
+    </div>
+
+    <div id="error-log"></div>
+    <div id="success-box" class="success-box">
+        ✅ <b>Embed OK!</b> This video is playing correctly in the IFrame.
+    </div>
+</div>
+
+<script src="https://www.youtube.com/iframe_api"></script>
+<script>
+    let player;
+    let testTimeout;
+
+    function onYouTubeIframeAPIReady() {
+        console.log('API Ready');
+    }
+
+    function extractVideoId(input) {
+        const urlMatch = input.match(/(?:v=|youtu\.be\/|embed\/)([A-Za-z0-9_-]{11})/);
+        if (urlMatch) return urlMatch[1];
+        return input.trim().length === 11 ? input.trim() : null;
+    }
+
+    function loadTest() {
+        const input = document.getElementById('video-id').value;
+        const videoId = extractVideoId(input);
+        
+        if (!videoId) {
+            alert('Invalid YouTube ID or URL');
+            return;
+        }
+
+        document.getElementById('current-id').textContent = videoId;
+        document.getElementById('error-log').style.display = 'none';
+        document.getElementById('success-box').style.display = 'none';
+        document.getElementById('player-state').textContent = 'Loading...';
+        
+        if (player) {
+            player.destroy();
+        }
+
+        player = new YT.Player('yt-player', {
+            height: '100%',
+            width: '100%',
+            videoId: videoId,
+            playerVars: {
+                'autoplay': 1,
+                'controls': 1,
+                'origin': window.location.origin
+            },
+            events: {
+                'onReady': onPlayerReady,
+                'onStateChange': onPlayerStateChange,
+                'onError': onPlayerError
+            }
+        });
+    }
+
+    function onPlayerReady(event) {
+        document.getElementById('player-state').textContent = 'Ready';
+        event.target.playVideo();
+    }
+
+    function onPlayerStateChange(event) {
+        const states = {
+            '-1': 'Unstarted',
+            '0': 'Ended',
+            '1': 'Playing',
+            '2': 'Paused',
+            '3': 'Buffering',
+            '5': 'Cued'
+        };
+        document.getElementById('player-state').textContent = states[event.data] || 'Unknown';
+        
+        if (event.data === 1) {
+            document.getElementById('success-box').style.display = 'block';
+        }
+    }
+
+    function onPlayerError(event) {
+        const errors = {
+            '2': 'Invalid parameter / Malformed ID',
+            '5': 'HTML5 Player Error',
+            '100': 'Video Not Found / Removed',
+            '101': 'Embed Restricted by Owner',
+            '150': 'Embed Restricted by Owner (Same as 101)'
+        };
+        
+        const msg = errors[event.data] || 'Unknown Error: ' + event.data;
+        document.getElementById('player-state').textContent = 'ERROR ' + event.data;
+        
+        const log = document.getElementById('error-log');
+        log.innerHTML = `⚠️ <b>FAILED:</b> ${msg}<br><br>This video is NOT compatible with the Jukebox.`;
+        log.style.display = 'block';
+        document.getElementById('success-box').style.display = 'none';
+    }
+</script>
+
+</body>
+</html>
