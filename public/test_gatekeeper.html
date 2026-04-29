@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gatekeeper Lab — AI Filter Test</title>
+    <style>
+        :root {
+            --bg: #0d1117;
+            --surface: #161b22;
+            --accent: #f78166;
+            --text: #c9d1d9;
+            --muted: #8b949e;
+            --border: #30363d;
+            --success: #3fb950;
+            --danger: #f85149;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            max-width: 1000px;
+            width: 100%;
+        }
+        h1 { margin-bottom: 8px; color: white; display: flex; align-items: center; gap: 12px; }
+        p.subtitle { margin-bottom: 32px; color: var(--muted); }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+        .panel {
+            background: var(--surface);
+            padding: 24px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+        label {
+            display: block;
+            font-size: 12px;
+            text-transform: uppercase;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: var(--muted);
+        }
+        textarea {
+            width: 100%;
+            background: #0d1117;
+            border: 1px solid var(--border);
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 14px;
+            resize: vertical;
+            margin-bottom: 20px;
+        }
+        input[type="text"] {
+            width: 100%;
+            background: #0d1117;
+            border: 1px solid var(--border);
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .actions {
+            display: flex;
+            gap: 12px;
+        }
+        button {
+            flex: 1;
+            padding: 14px;
+            border-radius: 8px;
+            border: none;
+            font-weight: 700;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-secondary { background: var(--border); color: white; }
+        
+        .results-panel {
+            margin-top: 32px;
+        }
+        .stats {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        .stat-badge {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: var(--surface);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .comparison-table th, .comparison-table td {
+            text-align: left;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+        }
+        .comparison-table th { background: #21262d; font-size: 12px; text-transform: uppercase; color: var(--muted); }
+        .status-keep { color: var(--success); font-weight: 700; }
+        .status-reject { color: var(--danger); font-weight: 700; opacity: 0.5; }
+        .rejected-row { opacity: 0.4; background: rgba(248, 81, 73, 0.05); }
+
+        .loader {
+            display: none;
+            text-align: center;
+            padding: 40px;
+            color: var(--accent);
+            font-weight: 700;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🛡️ Gatekeeper Lab</h1>
+    <p class="subtitle">Test how effectively Gemini can filter a "dirty" list of songs to keep only what fits the vibe.</p>
+
+    <div class="grid">
+        <div class="panel">
+            <label>1. Define the Narrative / Vibe</label>
+            <input type="text" id="vibe" placeholder="e.g., Deep House with soulful vocals" value="Deep House / Organic House">
+            
+            <label>2. Input "Dirty" Song List (Artist - Title)</label>
+            <textarea id="inputList" style="height: 300px;" placeholder="Paste songs here, one per line...">Daft Punk - One More Time
+Stimming - Melodica
+Taylor Swift - Shake It Off
+Kollektiv Turmstrasse - Sorry I Am Late
+Metallica - Enter Sandman
+Solomun - Friends
+Justin Bieber - Baby
+Rampa - Les Gout
+Fisher - Losing It (too techy maybe?)
+The Beatles - Yesterday</textarea>
+        </div>
+
+        <div class="panel">
+            <label>3. Model & Settings</label>
+            <select id="modelId" style="width:100%; background:#0d1117; border:1px solid var(--border); color:white; padding:10px; border-radius:8px; margin-bottom:20px;">
+                <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash-Lite (Cheap & Fast)</option>
+                <option value="gemini-2.5-flash">Gemini 2.5 Flash (Smarter)</option>
+            </select>
+
+            <label>Creativity (Temperature: 0.3 is recommended for filtering)</label>
+            <input type="range" id="temperature" min="0" max="1" step="0.1" value="0.3" style="width:100%; margin-bottom:20px;">
+            <div id="tempVal" style="text-align:center; font-weight:bold; color:var(--accent); margin-top:-15px; margin-bottom:20px;">0.3</div>
+
+            <label>System Instruction Override</label>
+            <textarea id="sysPrompt" style="height: 100px;">You are a strict music curator (The Gatekeeper). 
+I will give you a Vibe and a List of songs. 
+Return ONLY a JSON array of the songs that fit the vibe perfectly.
+Reject anything that is even slightly off-vibe.</textarea>
+
+            <div class="actions">
+                <button class="btn-primary" id="runBtn" onclick="runFilter()">Filter List</button>
+                <button class="btn-secondary" onclick="document.getElementById('inputList').value=''">Clear</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="loader" class="loader">The Gatekeeper is judging your taste...</div>
+
+    <div id="resultsArea" class="results-panel" style="display:none">
+        <div class="stats">
+            <div class="stat-badge">Original: <span id="statOriginal">0</span></div>
+            <div class="stat-badge">Accepted: <span id="statAccepted">0</span></div>
+            <div class="stat-badge" style="color:var(--danger)">Rejected: <span id="statRejected">0</span></div>
+            <div class="stat-badge" style="color:var(--accent)">Cost: $<span id="statCost">0.00</span></div>
+        </div>
+
+        <table class="comparison-table">
+            <thead>
+                <tr>
+                    <th>Song</th>
+                    <th>Status</th>
+                    <th>Reasoning (AI Hallucinated)</th>
+                </tr>
+            </thead>
+            <tbody id="resultsTable">
+                <!-- Rows here -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    document.getElementById('temperature').oninput = (e) => document.getElementById('tempVal').innerText = e.target.value;
+
+    async function runFilter() {
+        const vibe = document.getElementById('vibe').value;
+        const inputRaw = document.getElementById('inputList').value;
+        const modelId = document.getElementById('modelId').value;
+        const temperature = parseFloat(document.getElementById('temperature').value);
+        const sysPrompt = document.getElementById('sysPrompt').value;
+        
+        const songs = inputRaw.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+        if (songs.length === 0) return alert('Input some songs!');
+
+        const userPrompt = `VIBE: ${vibe}\n\nLIST OF SONGS TO FILTER:\n${songs.join('\n')}\n\nReturn ONLY a JSON array of objects: [{"artist": "...", "title": "..."}] for the songs you KEEP.`;
+
+        const runBtn = document.getElementById('runBtn');
+        const loader = document.getElementById('loader');
+        const resultsArea = document.getElementById('resultsArea');
+        const tableBody = document.getElementById('resultsTable');
+
+        runBtn.disabled = true;
+        loader.style.display = 'block';
+        resultsArea.style.display = 'none';
+
+        try {
+            const res = await fetch('/api/test/gemini', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    modelId, 
+                    prompt: userPrompt, 
+                    systemInstruction: sysPrompt, 
+                    temperature,
+                    count: songs.length // needed for the API
+                })
+            });
+
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+
+            const accepted = data.tracks || [];
+            const acceptedSet = new Set(accepted.map(t => `${t.artist.toLowerCase()} - ${t.title.toLowerCase()}`));
+
+            tableBody.innerHTML = '';
+            songs.forEach(s => {
+                // Heuristic match
+                const isAccepted = Array.from(acceptedSet).some(a => s.toLowerCase().includes(a) || a.includes(s.toLowerCase()));
+                
+                const row = document.createElement('tr');
+                if (!isAccepted) row.className = 'rejected-row';
+
+                row.innerHTML = `
+                    <td>${s}</td>
+                    <td class="${isAccepted ? 'status-keep' : 'status-reject'}">${isAccepted ? 'KEEP' : 'REJECT'}</td>
+                    <td style="font-size:11px; color:var(--muted)">${isAccepted ? 'Fits the narrative.' : 'Does not match the required sonic fingerprint.'}</td>
+                `;
+                tableBody.appendChild(row);
+            });
+
+            document.getElementById('statOriginal').innerText = songs.length;
+            document.getElementById('statAccepted').innerText = accepted.length;
+            document.getElementById('statRejected').innerText = songs.length - accepted.length;
+            document.getElementById('statCost').innerText = data.usage?.estimatedCost || '0.00';
+
+            loader.style.display = 'none';
+            resultsArea.style.display = 'block';
+
+        } catch (err) {
+            alert('Filter failed: ' + err.message);
+            loader.style.display = 'none';
+        } finally {
+            runBtn.disabled = false;
+        }
+    }
+</script>
+
+</body>
+</html>

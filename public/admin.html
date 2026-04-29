@@ -1,954 +1,682 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Jukebox — Admin</title>
-<script src="/socket.io/socket.io.js"></script>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  :root {
-    --bg: #0a0a0a;
-    --surface: #161616;
-    --surface2: #1f1f1f;
-    --accent: #ff0000;
-    --red: #e84040;
-    --orange: #f59e0b;
-    --text: #fff;
-    --muted: #777;
-    --border: #2a2a2a;
-  }
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    min-height: 100vh;
-  }
-  .layout { display: flex; min-height: 100vh; }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Panel — Jukebox</title>
+  <style>
+    :root {
+      --bg: #0b0e14;
+      --surface: #161b22;
+      --accent: #58a6ff;
+      --accent-glow: rgba(88, 166, 255, 0.2);
+      --text: #c9d1d9;
+      --muted: #8b949e;
+      --border: #30363d;
+      --danger: #f85149;
+      --success: #3fb950;
+      --amber: #d29922;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    *, *:before, *:after { box-sizing: inherit; }
+    .container { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: 1fr 350px; gap: 24px; position: relative; }
+    main { grid-column: 1; min-width: 0; }
+    aside { grid-column: 2; width: 350px; }
+    h1, h2, h3 { color: white; margin-top: 0; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 24px; }
+    
+    .section-title { font-size: 12px; text-transform: uppercase; font-weight: 700; color: var(--muted); letter-spacing: 0.1em; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
 
-  /* Sidebar */
-  .sidebar {
-    width: 220px;
-    background: var(--surface);
-    border-right: 1px solid var(--border);
-    padding: 24px 16px;
-    flex-shrink: 0;
-    position: sticky;
-    top: 0;
-    height: 100vh;
-    overflow-y: auto;
-  }
-  .sidebar h1 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
-  .sidebar .sub { font-size: 12px; color: var(--muted); margin-bottom: 28px; }
-  .nav-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 12px;
-    border-radius: 10px;
-    cursor: pointer;
-    font-size: 14px;
-    color: var(--muted);
-    margin-bottom: 4px;
-    transition: all 0.15s;
-  }
-  .nav-item:hover { background: var(--surface2); color: var(--text); }
-  .nav-item.active { background: #2e1a1a; color: var(--accent); }
-  .sidebar-divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+    /* Mood/Genre Grids */
+    .btn-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-bottom: 20px; }
+    .mood-btn {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.2s;
+      font-size: 13px;
+      font-weight: 600;
+      text-align: left;
+    }
+    .mood-btn:hover { border-color: var(--muted); background: #1c2128; }
+    .mood-btn.active { border-color: var(--accent); background: var(--accent-glow); color: white; box-shadow: 0 0 15px var(--accent-glow); }
+    .mood-btn span:first-child { font-size: 18px; }
 
-  /* Status badge */
-  .status-badge {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    padding: 8px 12px;
-    border-radius: 10px;
-    background: var(--surface2);
-    margin-top: auto;
-  }
-  .status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--muted);
-  }
-  .status-dot.live { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+    /* Controls */
+    .controls { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+    button {
+      padding: 10px 20px;
+      border-radius: 8px;
+      border: none;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: opacity 0.2s;
+    }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary { background: var(--accent); color: white; }
+    .btn-danger { background: #30363d; color: var(--danger); border: 1px solid #442d2d; }
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
 
-  /* Main */
-  .main { flex: 1; padding: 28px 32px; max-width: 900px; }
-  .page { display: none; }
-  .page.active { display: block; }
-  h2 { font-size: 22px; font-weight: 700; margin-bottom: 20px; }
+    /* Discovery UI */
+    .discovery-status { 
+      background: #1c2128; border-radius: 8px; padding: 16px; margin-bottom: 20px; 
+      display: none; border-left: 4px solid var(--accent);
+    }
+    .progress-bar { width: 100%; height: 6px; background: #30363d; border-radius: 3px; margin-top: 10px; overflow: hidden; }
+    .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.3s; }
 
-  /* Stats */
-  .stats-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 14px;
-    margin-bottom: 28px;
-  }
-  .stat-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 18px;
-  }
-  .stat-card .label { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
-  .stat-card .value { font-size: 28px; font-weight: 700; }
-  .stat-card .value.green { color: var(--accent); }
+    /* Tracks */
+    .track-list { display: flex; flex-direction: column; gap: 8px; max-height: 500px; overflow-y: auto; padding-right: 8px; }
+    .track-item {
+      display: flex; align-items: center; gap: 12px; background: #0d1117; padding: 10px; border-radius: 8px; border: 1px solid transparent;
+    }
+    .track-item:hover { border-color: var(--border); }
+    .track-art { width: 40px; height: 40px; border-radius: 4px; object-fit: cover; background: #000; }
+    .track-info { flex: 1; min-width: 0; }
+    .track-title { font-weight: 600; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; }
+    .track-artist { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .track-source { font-size: 10px; text-transform: uppercase; background: #21262d; padding: 2px 6px; border-radius: 4px; color: var(--muted); }
+    .btn-remove { color: var(--muted); background: transparent; padding: 4px; border-radius: 4px; }
+    .btn-remove:hover { color: var(--danger); background: rgba(248, 81, 73, 0.1); }
 
-  /* Now playing */
-  .now-playing-card {
-    background: linear-gradient(135deg, #2e1a1a, #111212);
-    border: 1px solid #4a2d2d;
-    border-radius: 16px;
-    padding: 20px;
-    display: flex;
-    gap: 16px;
-    align-items: center;
-    margin-bottom: 28px;
-  }
-  .now-playing-card img { width: 70px; height: 70px; border-radius: 10px; object-fit: cover; background: #2a2a2a; }
-  .now-playing-card .info { flex: 1; }
-  .now-playing-card .label { font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
-  .now-playing-card .title { font-size: 18px; font-weight: 700; }
-  .now-playing-card .artist { font-size: 14px; color: var(--muted); margin-top: 4px; }
+    /* Custom Prompt Box */
+    .prompt-box { display: flex; gap: 10px; margin-top: 20px; }
+    .prompt-box input { 
+      flex: 1; background: #0d1117; border: 1px solid var(--border); 
+      color: white; padding: 10px 16px; border-radius: 8px; font-size: 14px;
+    }
+    .prompt-box input:focus { outline: none; border-color: var(--accent); }
 
-  /* Buttons */
-  .btn {
-    padding: 10px 18px;
-    border-radius: 10px;
-    border: none;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-  .btn-primary { background: var(--accent); color: #000; }
-  .btn-primary:hover { background: #1ed760; }
-  .btn-danger { background: rgba(232,64,64,0.15); color: var(--red); border: 1px solid rgba(232,64,64,0.3); }
-  .btn-danger:hover { background: rgba(232,64,64,0.25); }
-  .btn-ghost { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
-  .btn-ghost:hover { background: #2a2a2a; }
+    /* Sidebar / Stats */
+    .sidebar-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+    .stat-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px; }
+    .stat-label { color: var(--muted); }
+    .stat-value { color: white; font-weight: 600; }
 
-  /* Switch Toggle */
-  .switch { position: relative; display: inline-block; width: 44px; height: 22px; }
-  .switch input { opacity: 0; width: 0; height: 0; }
-  .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #333; transition: .3s; border-radius: 22px; }
-  .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
-  input:checked + .slider { background-color: var(--accent); }
-  input:checked + .slider:before { transform: translateX(22px); }
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 
-  /* Queue Table */
-  .queue-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 16px;
-  }
-  .queue-table { width: 100%; border-collapse: separate; border-spacing: 0 6px; }
-  .queue-table thead th {
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    color: var(--muted);
-    padding: 0 12px 8px;
-    text-align: left;
-  }
-  .queue-table tbody tr {
-    background: var(--surface);
-    border-radius: 12px;
-  }
-  .queue-table tbody td {
-    padding: 10px 12px;
-    vertical-align: middle;
-  }
-  .queue-table tbody td:first-child { border-radius: 12px 0 0 12px; }
-  .queue-table tbody td:last-child { border-radius: 0 12px 12px 0; }
-  .queue-pos { font-size: 13px; font-weight: 700; color: var(--muted); width: 30px; }
-  .queue-pos.top { color: var(--accent); }
-  .track-img { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; background: #333; }
-  .track-name { font-size: 14px; font-weight: 600; }
-  .track-artist-sm { font-size: 12px; color: var(--muted); }
-  .vote-count {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    background: var(--surface2);
-    padding: 4px 10px;
-    border-radius: 20px;
-    font-size: 13px;
-    font-weight: 600;
-  }
-  .remove-btn {
-    background: none;
-    border: none;
-    color: var(--muted);
-    cursor: pointer;
-    font-size: 18px;
-    padding: 4px 8px;
-    border-radius: 8px;
-    transition: all 0.15s;
-  }
-  .remove-btn:hover { color: var(--red); background: rgba(232,64,64,0.1); }
-  .empty-state {
-    text-align: center;
-    color: var(--muted);
-    padding: 48px 16px;
-    font-size: 14px;
-  }
+    /* Modal for Auth */
+    #authModal {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(4px);
+      display: flex; align-items: center; justify-content: center; z-index: 1000;
+    }
+    .auth-card { background: var(--surface); padding: 32px; border-radius: 16px; border: 1px solid var(--border); width: 100%; max-width: 400px; text-align: center; }
+    .auth-card input { width: 100%; padding: 12px; background: #0d1117; border: 1px solid var(--border); border-radius: 8px; color: white; margin: 20px 0; font-size: 16px; text-align: center; }
 
-  /* Login */
-  .login-wrap {
-    max-width: 360px;
-    margin: 80px auto;
-    text-align: center;
-  }
-  .login-wrap h2 { margin-bottom: 8px; }
-  .login-wrap p { color: var(--muted); font-size: 14px; margin-bottom: 28px; }
-  .input {
-    width: 100%;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 12px 16px;
-    color: var(--text);
-    font-size: 15px;
-    outline: none;
-    margin-bottom: 12px;
-    transition: border-color 0.2s;
-  }
-  .input:focus { border-color: var(--accent); }
-  .error-msg { color: var(--red); font-size: 13px; margin-top: 8px; }
+    /* Toggles */
+    .toggle-group { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding: 10px; background: #0d1117; border-radius: 8px; }
+    .toggle-label { font-size: 13px; font-weight: 600; }
+    .switch { position: relative; display: inline-block; width: 44px; height: 22px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #30363d; transition: .4s; border-radius: 22px; }
+    .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+    input:checked + .slider { background-color: var(--accent); }
+    input:checked + .slider:before { transform: translateX(22px); }
 
-  /* Pool */
-  .mode-selector { display: flex; gap: 8px; margin-bottom: 24px; }
-  .mode-btn { padding: 10px 20px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.15s; }
-  .mode-btn:hover { background: var(--surface2); color: var(--text); }
-  .mode-btn.active { background: #2e1a1a; color: var(--accent); border-color: var(--accent); }
-  .pool-section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
-  .pool-section-label.playlist-label { color: var(--accent); }
-  .pool-section-label.discovery-label { color: #8b8bff; }
-  .pool-section.dimmed { opacity: 0.35; pointer-events: none; }
-  .playlist-item { display: flex; align-items: center; justify-content: space-between; background: var(--surface2); padding: 12px 14px; border-radius: 10px; }
-  .playlist-item .pname { font-size: 14px; font-weight: 600; }
-  .playlist-item .pcount { font-size: 12px; color: var(--muted); margin-top: 2px; }
-  .pool-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
-  .pool-section { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 20px; }
-  .pool-section h3 { font-size: 14px; font-weight: 600; margin-bottom: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; }
-  .pool-input-row { display: flex; gap: 8px; }
-  .pool-input-row .input { margin-bottom: 0; flex: 1; }
-  .mood-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-  .mood-btn { display: flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 20px; background: var(--surface2); border: 1.5px solid var(--border); color: var(--text); cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.15s; user-select: none; }
-  .mood-btn:hover { border-color: var(--accent); }
-  .mood-btn.active { background: var(--accent); border-color: var(--accent); color: #000; }
-  .seed-list { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
-  .seed-item { display: flex; align-items: center; justify-content: space-between; background: var(--surface2); padding: 10px 12px; border-radius: 10px; font-size: 14px; }
-  .seed-item .source-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
-  .badge-artist { background: rgba(29,185,84,0.15); color: var(--accent); }
-  .badge-genre  { background: rgba(100,100,255,0.15); color: #8b8bff; }
-  .badge-pinned { background: rgba(245,158,11,0.15); color: var(--orange); }
-  .pool-track-list { max-height: 420px; overflow-y: auto; margin-top: 12px; }
-  .pool-track-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; transition: background 0.1s; }
-  .pool-track-item:hover { background: var(--surface2); }
-  .pool-track-item img { width: 36px; height: 36px; border-radius: 6px; object-fit: cover; background: #333; flex-shrink: 0; }
-  .pool-track-info { flex: 1; min-width: 0; }
-  .pool-track-info .name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .pool-track-info .artist { font-size: 11px; color: var(--muted); }
-  .pool-header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
-  .pool-header-row h2 { margin-bottom: 0; }
-  .textarea {
-    width: 100%;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 10px 12px;
-    color: var(--text);
-    font-size: 13px;
-    font-family: monospace;
-    outline: none;
-    resize: vertical;
-    min-height: 80px;
-    transition: border-color 0.2s;
-  }
-  .textarea:focus { border-color: var(--accent); }
+    /* Saved Playlists */
+    .saved-row {
+      display: flex; align-items: center; gap: 12px;
+      background: #0d1117; padding: 10px 12px; border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    .saved-row:hover { border-color: var(--muted); }
+    .saved-meta { flex: 1; min-width: 0; }
+    .saved-name { font-weight: 600; color: white; font-size: 14px; }
+    .saved-sub  { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .saved-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+    .saved-actions button {
+      padding: 6px 10px; font-size: 11px; border-radius: 6px;
+    }
+    .btn-tiny-primary { background: var(--accent); color: white; border: none; }
+    .btn-tiny-amber   { background: transparent; color: var(--amber); border: 1px solid var(--amber); }
+    .btn-tiny-outline { background: transparent; color: var(--text); border: 1px solid var(--border); }
+    .btn-tiny-danger  { background: transparent; color: var(--danger); border: 1px solid #442d2d; }
 
-  /* Settings */
-  .settings-section { margin-bottom: 32px; }
-  .settings-section h3 { font-size: 15px; font-weight: 600; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
-  .setting-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 14px 0;
-    border-bottom: 1px solid var(--border);
-  }
-  .setting-label { font-size: 14px; }
-  .setting-desc { font-size: 12px; color: var(--muted); margin-top: 3px; }
-  .qr-box {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 24px;
-    text-align: center;
-    margin-top: 16px;
-  }
-  .qr-url {
-    font-size: 15px;
-    font-weight: 600;
-    margin-bottom: 8px;
-    word-break: break-all;
-  }
-  .qr-note { font-size: 12px; color: var(--muted); }
-</style>
+    /* Radio Group */
+    .radio-group { display: flex; background: #0d1117; border-radius: 8px; padding: 4px; gap: 4px; }
+    .radio-option { flex: 1; text-align: center; padding: 8px; font-size: 12px; font-weight: 600; border-radius: 6px; cursor: pointer; color: var(--muted); }
+    .radio-option.active { background: var(--accent); color: white; }
+
+    /* Hub Links */
+    .hub-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-top: 10px; }
+    .hub-link {
+      display: flex; align-items: center; gap: 8px; background: #0d1117; border: 1px solid var(--border);
+      padding: 12px; border-radius: 8px; color: var(--text); text-decoration: none; font-size: 13px; font-weight: 600; transition: 0.2s;
+    }
+    .hub-link:hover { border-color: var(--accent); background: #1c2128; color: white; transform: translateY(-2px); }
+    .hub-link span { font-size: 18px; }
+  </style>
 </head>
 <body>
 
-<div id="loginScreen" style="display:block; padding: 24px;">
-  <div class="login-wrap">
-    <div style="font-size:40px;margin-bottom:16px">🎵</div>
-    <h2>Admin Panel</h2>
-    <p>Enter the admin password to continue</p>
-    <input class="input" type="password" id="pwInput" placeholder="Password" onkeydown="if(event.key==='Enter')login()">
-    <button class="btn btn-primary" style="width:100%" onclick="login()">Sign in</button>
-    <div class="error-msg" id="loginError"></div>
+<div id="authModal">
+  <div class="auth-card">
+    <h2>🔒 Admin Access</h2>
+    <p style="color: var(--muted)">Enter the admin password to continue</p>
+    <input type="password" id="adminPw" placeholder="Password..." onkeydown="if(event.key==='Enter') verifyAuth()">
+    <button class="btn-primary" style="width: 100%; justify-content: center;" onclick="verifyAuth()">Unlock Panel</button>
   </div>
 </div>
 
-<div class="layout" id="adminUI" style="display:none">
-  <div class="sidebar">
-    <div>🎵</div>
-    <h1 style="margin-top:8px">Jukebox</h1>
-    <p class="sub">Admin Panel</p>
-
-    <div class="nav-item active" onclick="showPage('dashboard', this)">📊 Dashboard</div>
-    <div class="nav-item" onclick="showPage('queue', this)">🎶 Queue</div>
-    <div class="nav-item" onclick="showPage('pool', this); loadPool()">🎵 Song Pool</div>
-    <div class="nav-item" onclick="showPage('settings', this)">⚙️ Settings</div>
-    <hr class="sidebar-divider">
-    <a href="/player.html" target="_blank" style="text-decoration:none">
-      <div class="nav-item">🎧 Host Player ↗</div>
-    </a>
-    <a href="/guest.html" target="_blank" style="text-decoration:none">
-      <div class="nav-item">👤 Guest View ↗</div>
-    </a>
-    <hr class="sidebar-divider">
-    <div class="status-badge">
-      <div class="status-dot" id="connDot"></div>
-      <span id="connLabel">Connecting…</span>
-    </div>
-  </div>
-
-  <div class="main">
-    <!-- Dashboard -->
-    <div class="page active" id="page-dashboard">
-      <h2>Dashboard</h2>
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="label">Songs in queue</div>
-          <div class="value green" id="statQueue">0</div>
-        </div>
-        <div class="stat-card">
-          <div class="label">Total votes</div>
-          <div class="value" id="statVotes">0</div>
-        </div>
-        <div class="stat-card">
-          <div class="label">Status</div>
-          <div class="value" style="font-size:18px" id="statStatus">Idle</div>
-        </div>
-      </div>
-
-      <div style="margin-bottom:20px">
-        <button class="btn btn-primary" id="skipBtn" onclick="skip()" style="width:100%;justify-content:center;padding:14px">▶ Start Music</button>
-      </div>
-
-      <div id="nowPlayingCard" style="display:none">
-        <div class="now-playing-card">
-          <img id="npImg" src="" alt="">
-          <div class="info">
-            <div class="label" id="npLabel">Now playing</div>
-            <div class="title" id="npTitle">—</div>
-            <div class="artist" id="npArtist"></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="queue-header">
-        <h3 style="font-size:16px;font-weight:600">Next up</h3>
-        <button class="btn btn-danger" onclick="clearQueue()">🗑 Clear all</button>
-      </div>
-      <div id="dashQueueList"></div>
+<div class="container">
+  <main>
+    <div class="card">
+      <h1>🎧 Bar Jukebox Orchestrator</h1>
+      <p style="color: var(--muted); margin-top: -10px;">Full control over the vibe, the discovery engine, and the bouncer.</p>
     </div>
 
-    <!-- Queue -->
-    <div class="page" id="page-queue">
-      <div class="queue-header">
-        <h2>Full Queue</h2>
-        <button class="btn btn-danger" onclick="clearQueue()">🗑 Clear all</button>
+    <!-- Discovery Dashboard -->
+    <div class="card">
+      <div class="section-title">✨ High-Power Discovery (Ultra-Fill)</div>
+      
+      <div id="discoveryUI" class="discovery-status">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-weight: 700; color: white;">🚀 Discovering: <span id="activeMoodName">--</span></span>
+          <span id="discoveryCount" style="font-size: 12px; color: var(--muted);">0 / 0</span>
+        </div>
+        <div class="progress-bar"><div id="discoveryFill" class="progress-fill"></div></div>
       </div>
-      <table class="queue-table">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th></th>
-            <th>Song</th>
-            <th>Votes</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="queueTableBody"></tbody>
-      </table>
-      <div id="queueEmpty" class="empty-state" style="display:none">Queue is empty</div>
+
+      <!-- Genres Tier -->
+      <div class="section-title" style="margin-top: 20px;">💿 Core Genres (The "What")</div>
+      <div id="genreGrid" class="btn-grid">
+        <!-- JS Populated -->
+      </div>
+
+      <!-- Moods Tier -->
+      <div class="section-title">🎭 Atmosphere & Mood (The "How")</div>
+      <div id="moodGrid" class="btn-grid">
+        <!-- JS Populated -->
+      </div>
+
+      <div class="controls">
+        <button class="btn-primary" onclick="populateMoods()" id="btnPopulate">
+          <span>🔥</span> Populate Combined Pool (Ultra-Fill)
+        </button>
+        <button class="btn-danger" onclick="clearMoodPool()">
+          <span>🗑️</span> Clear Discovery Pools
+        </button>
+      </div>
+
+      <div class="section-title">🔍 Custom Vibe Engine</div>
+      <div class="prompt-box">
+        <input type="text" id="customPrompt" placeholder="Type a specific vibe (e.g. 'Chill Sunset Afrohouse with organic textures')...">
+        <button class="btn-primary" onclick="buildCustomVibe()"><span>✨</span> Build</button>
+      </div>
+
+      <div class="section-title">📻 One-Song Radio Builder</div>
+      <div class="prompt-box">
+        <input type="text" id="radioSeedQuery" placeholder="Search one seed song (e.g. 'Bad Bunny Tití Me Preguntó')...">
+        <button class="btn-primary" onclick="searchRadioSeed()"><span>🔎</span> Search</button>
+        <button class="btn-primary" onclick="buildSeedRadioPool()" id="btnBuildRadioSeed" disabled><span>📻</span> Build Radio Pool</button>
+      </div>
+      <div id="radioSeedSelected" style="display:none; margin-top:10px; padding:12px; background:#0d1117; border:1px solid var(--accent); border-radius:8px;"></div>
+      <div id="radioSeedResults" class="track-list" style="margin-top:10px;"></div>
     </div>
 
-    <!-- Pool -->
-    <div class="page" id="page-pool">
-      <div class="pool-header-row">
-        <h2>Song Pool</h2>
-        <button class="btn btn-ghost" onclick="rebuildPool()">↺ Rebuild Pool</button>
-      </div>
-
-      <!-- Mode Selector -->
-      <div class="mode-selector">
-        <button class="mode-btn" data-mode="playlist" onclick="setPoolMode('playlist')">Playlist only</button>
-        <button class="mode-btn" data-mode="discovery" onclick="setPoolMode('discovery')">Discovery only</button>
-        <button class="mode-btn" data-mode="both" onclick="setPoolMode('both')">Both</button>
-      </div>
-
-      <!-- Stats -->
-      <div class="pool-stats">
-        <div class="stat-card">
-          <div class="label">Total in pool</div>
-          <div class="value green" id="poolTotal">—</div>
-        </div>
-        <div class="stat-card">
-          <div class="label">Playlist tracks</div>
-          <div class="value" id="poolCsvCount">—</div>
-        </div>
-        <div class="stat-card">
-          <div class="label">Discovery tracks</div>
-          <div class="value" id="poolDiscoveryCount">—</div>
-        </div>
-        <div class="stat-card">
-          <div class="label">Playlists loaded</div>
-          <div class="value" id="poolPlaylistsCount">—</div>
-        </div>
-      </div>
-
-      <!-- Playlist Pool -->
-      <div class="pool-section" id="playlistPoolSection">
-        <div class="pool-section-label playlist-label">Playlist Pool</div>
-        <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Import a YouTube playlist by URL or ID, or upload a CSV (videoId, title, artist, album, albumArt — one row per track).</p>
-
-        <!-- YouTube playlist import -->
-        <div style="margin-bottom:14px">
-          <div style="font-size:13px;font-weight:600;margin-bottom:8px">Import YouTube Playlist</div>
-          <div class="pool-input-row">
-            <input class="input" id="ytPlaylistInput" placeholder="YouTube playlist URL or ID (e.g. PLxxxxxx)">
-            <input class="input" id="ytPlaylistName" placeholder="Name" style="max-width:160px">
-            <button class="btn btn-primary" onclick="importYouTubePlaylist()">Import</button>
-          </div>
-          <div id="ytImportStatus" style="font-size:12px;color:var(--muted);margin-top:6px"></div>
-        </div>
-
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <input type="file" id="csvFileInput" accept=".csv" style="display:none" onchange="handleCSVUpload(event)">
-          <button class="btn btn-ghost" onclick="document.getElementById('csvFileInput').click()">Upload CSV</button>
-        </div>
-
-        <!-- Imported playlists -->
-        <div class="seed-list" id="csvPlaylistList" style="margin-top:14px"></div>
-      </div>
-
-      <!-- Discovery Pool -->
-      <div class="pool-section" id="discoveryPoolSection">
-        <div class="pool-section-label discovery-label">Discovery Pool</div>
-
-        <!-- AI DJ Narrator Toggle -->
-        <div style="margin-bottom:12px; display: flex; justify-content: space-between; align-items: center; background: var(--surface2); padding: 12px; border-radius: 10px; border: 2px solid var(--accent); box-shadow: 0 0 15px rgba(99, 102, 241, 0.1);">
-          <div>
-            <div style="font-size:13px; font-weight:600; margin-bottom:2px">🎤 Live AI DJ Narrator</div>
-            <div style="font-size:11px; color:var(--muted)">Gemini 3.1 Live: Real-time track intros & banter</div>
-            <select id="aiDjVoiceSelect" onchange="updateAiDjSettings()" style="margin-top:8px; font-size:11px; background:var(--bg); color:white; border:1px solid var(--border); border-radius:4px; padding:2px 6px">
-              <option value="Puck">Puck (Playful Male - High Energy)</option>
-              <option value="Orus">Orus (Energetic Male - Radio Vibe)</option>
-              <option value="Charon">Charon (Deep Male - Authoritative)</option>
-              <option value="Fenrir">Fenrir (Rugged Male - Steady)</option>
-              <option value="Kore">Kore (Bright Female - Standard)</option>
-              <option value="Aoede">Aoede (Clear Female - Balanced)</option>
-              <option value="Leda">Leda (Calm Female - Soothing)</option>
-              <option value="Zephyr">Zephyr (Soft/Neutral - Airy)</option>
-            </select>
-          </div>
-          <label class="switch">
-            <input type="checkbox" id="aiDjToggle" onchange="updateAiDjSettings()">
-            <span class="slider round"></span>
-          </label>
-        </div>
-
-        <!-- Smart Discovery Toggle -->
-
-        <div style="margin-bottom:12px; display: flex; justify-content: space-between; align-items: center; background: var(--surface2); padding: 12px; border-radius: 10px; border: 1px solid var(--border);">
-          <div>
-            <div style="font-size:13px; font-weight:600; margin-bottom:2px">Smart-Fill Discovery</div>
-            <div style="font-size:11px; color:var(--muted)">Auto-hunt for similar tracks in background</div>
-          </div>
-          <label class="switch">
-            <input type="checkbox" id="smartFillToggle" onchange="toggleSmartFill(this.checked)">
-            <span class="slider round"></span>
-          </label>
-        </div>
-
-        <!-- Rolling Discovery Toggle -->
-        <div style="margin-bottom:24px; display: flex; justify-content: space-between; align-items: center; background: var(--surface2); padding: 12px; border-radius: 10px; border: 1px solid var(--border);">
-          <div>
-            <div style="font-size:13px; font-weight:600; margin-bottom:2px">Song Replaced in Pool after finish</div>
-            <div style="font-size:11px; color:var(--muted)">Remove played tracks and hunt for replacements</div>
-          </div>
-          <label class="switch">
-            <input type="checkbox" id="rollingToggle" onchange="toggleRollingDiscovery(this.checked)">
-            <span class="slider round"></span>
-          </label>
-        </div>
-
-        <!-- Artist / Discovery blend slider -->
-        <div style="margin-bottom:24px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-            <span style="font-size:13px;font-weight:600">Blend</span>
-            <span id="ratioLabel" style="font-size:12px;color:var(--muted)">50% Artists · 50% Discovery</span>
-          </div>
-          <div style="display:flex;align-items:center;gap:10px">
-            <span style="font-size:11px;color:var(--muted);white-space:nowrap">All Discovery</span>
-            <input type="range" id="ratioSlider" min="0" max="100" value="50" style="flex:1;accent-color:var(--accent)" oninput="updateRatioLabel(this.value)" onchange="saveRatio(this.value)">
-            <span style="font-size:11px;color:var(--muted);white-space:nowrap">All Artists</span>
-          </div>
-        </div>
-
-        <!-- Moods & Genres -->
-        <div style="margin-bottom:24px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-            <div style="font-size:13px;font-weight:600">AI DJ: Vibe Selection</div>
-          </div>
-          
-          <!-- Custom Prompt Box -->
-          <div style="margin-bottom:16px; background: var(--surface2); padding: 12px; border-radius: 10px; border: 1px solid var(--border);">
-            <div style="font-size:11px; color:var(--muted); margin-bottom:8px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700;">Custom Vibe Prompt</div>
-            <textarea id="customPromptInput" class="textarea" style="min-height:60px; margin-bottom:10px; background: var(--bg); border-color: var(--border);" placeholder="e.g. 90s Deep House with soulful female vocals, high energy..."></textarea>
-            <button class="btn btn-primary" id="customPopulateBtn" onclick="buildCustomPool()" style="width:100%; display:flex; justify-content:center; align-items:center; gap:8px;">
-              <span>✨ Build Custom Pool</span>
-            </button>
-          </div>
-
-          <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Or pick preset vibes from below and populate them:</p>
-          <div class="mood-grid" id="moodGrid" style="margin-bottom:12px"></div>
-          <button class="btn btn-primary" id="populateMoodBtn" onclick="populateMoodPool()" style="width:100%; display:flex; justify-content:center; align-items:center; gap:8px; background: #6366f1; border-color: #4f46e5;">
-            <span>✨ Populate AI Mood Pool</span>
+    <div class="card">
+      <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
+        <span>📊 Active Discovery Pool (<span id="totalPoolCount">0</span> tracks)</span>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button id="btnClearSavedPool" class="btn-danger" onclick="clearLoadedPlaylistPool()" style="display:none; padding:6px 14px; font-size:12px;">
+            <span>🧹</span> Clear Loaded Playlist
+          </button>
+          <button class="btn-primary" onclick="savePoolPrompt()" style="padding:6px 14px; font-size:12px;">
+            <span>💾</span> Save Current Pool
           </button>
         </div>
-
-        <!-- Discovery Progress Bar -->
-        <div id="discoveryProgressContainer" style="display:none; margin-bottom:24px; background: var(--surface2); padding: 12px; border-radius: 10px; border: 1px solid var(--border);">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px">
-            <span style="font-size:12px; font-weight:600; color:#8b8bff" id="discoveryMoodName">Discovering...</span>
-            <span style="font-size:11px; color:var(--muted)" id="discoveryCountText">0/50</span>
-          </div>
-          <div style="height:6px; background:#333; border-radius:3px; overflow:hidden">
-            <div id="discoveryProgressBar" style="height:100%; background:#8b8bff; width:0%; transition: width 0.3s ease;"></div>
-          </div>
-        </div>
-
-        <!-- Artist Seeds -->
-        <div style="margin-bottom:20px">
-          <div style="font-size:13px;font-weight:600;margin-bottom:8px">Artist Seeds</div>
-          <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Search for an artist and pick from results — pulls their songs directly from YouTube Music.</p>
-          <div class="pool-input-row">
-            <input class="input" id="artistInput" placeholder="Search artist (e.g. The Weeknd)" oninput="searchArtists()" onkeydown="if(event.key==='Escape')clearArtistResults()">
-          </div>
-          <div id="artistSearchResults" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:10px;margin-top:6px;overflow:hidden"></div>
-          <div class="seed-list" id="artistSeedList"></div>
-        </div>
-
-        <!-- Pinned Tracks -->
-        <div>
-          <div style="font-size:13px;font-weight:600;margin-bottom:8px">Pinned Tracks</div>
-          <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Paste YouTube video URLs or video IDs — one per line. Always included.</p>
-          <textarea class="textarea" id="pinnedInput" placeholder="dQw4w9WgXcQ&#10;https://www.youtube.com/watch?v=dQw4w9WgXcQ&#10;https://youtu.be/dQw4w9WgXcQ"></textarea>
-          <div style="margin-top:10px"><button class="btn btn-primary" onclick="addPinnedTracks()">Add Tracks</button></div>
-          <div class="seed-list" id="pinnedTrackList"></div>
-        </div>
       </div>
-
-      <!-- Full Track List -->
-      <div class="pool-section">
-        <h3>Active pool tracks <span id="poolTrackCountLabel" style="font-weight:400;color:var(--muted)"></span></h3>
-        <div class="pool-track-list" id="poolTrackList">
-          <div class="empty-state">Load pool to see tracks</div>
-        </div>
+      <div id="poolTracks" class="track-list">
+        <!-- JS Populated -->
       </div>
     </div>
 
-    <!-- Settings -->
-    <div class="page" id="page-settings">
-      <h2>Settings</h2>
-      <div class="settings-section">
-        <h3>Playback</h3>
-        <div class="setting-row">
-          <div>
-            <div class="setting-label">Skip to next track</div>
-            <div class="setting-desc">Force play the next song in queue</div>
-          </div>
-          <button class="btn btn-ghost" onclick="skip()">⏭ Skip now</button>
-        </div>
-        <div class="setting-row">
-          <div>
-            <div class="setting-label">Host player</div>
-            <div class="setting-desc">Open the YouTube player page (keep open on your bar device)</div>
-          </div>
-          <a href="/player.html" target="_blank"><button class="btn btn-primary">Open Host Player</button></a>
-        </div>
+    <!-- Saved Playlists -->
+    <div class="card">
+      <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
+        <span>💾 Saved Playlists (<span id="savedCount">0</span>)</span>
+        <button class="btn-outline" onclick="loadSavedPlaylists()" style="padding:6px 14px; font-size:12px;">
+          <span>🔄</span> Refresh List
+        </button>
       </div>
-
-      <div class="settings-section">
-        <h3>Guest QR Code</h3>
-        <div class="qr-box">
-          <div class="qr-url" id="guestUrl"></div>
-          <div class="qr-note">Share this URL or generate a QR code pointing to it. Guests visit this to request songs.</div>
-          <div style="margin-top:16px">
-            <button class="btn btn-ghost" onclick="copyGuestUrl()">📋 Copy URL</button>
-          </div>
-        </div>
+      <div id="savedPlaylistsList" style="display:flex; flex-direction:column; gap:8px;">
+        <!-- JS populated -->
+      </div>
+      <div id="editPanel" style="display:none; margin-top:16px; padding:16px; background:#0d1117; border:1px solid var(--accent); border-radius:10px;">
+        <!-- JS populated -->
       </div>
     </div>
-  </div>
+  </main>
+
+  <aside>
+    <div class="sidebar-card" style="border-color: var(--accent);">
+      <div class="section-title" style="color: var(--accent);">🕹️ Master Control</div>
+      <div id="nowPlayingBox" style="background: #0d1117; padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+        <div style="font-size: 10px; text-transform: uppercase; color: var(--muted); margin-bottom: 4px;">Now Playing</div>
+        <div id="adminNpTitle" style="font-weight: 700; color: white; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Nothing Playing</div>
+      </div>
+      <div class="controls" style="margin-bottom: 0;">
+        <button class="btn-primary" onclick="skipTrack()" style="flex: 1; justify-content: center;">
+          <span>⏭️</span> Skip Track
+        </button>
+        <button class="btn-danger" onclick="clearQueue()" style="flex: 1; justify-content: center;">
+          <span>🧹</span> Clear Queue
+        </button>
+      </div>
+    </div>
+
+    <div class="sidebar-card">
+      <div class="section-title">Mode Control</div>
+      <div class="radio-group" id="modeSelect">
+        <div class="radio-option" data-mode="playlist" onclick="setMode('playlist')">PLAYLIST</div>
+        <div class="radio-option" data-mode="discovery" onclick="setMode('discovery')">DISCOVERY</div>
+        <div class="radio-option" data-mode="both" onclick="setMode('both')">HYBRID</div>
+      </div>
+      <p style="font-size: 11px; color: var(--muted); margin-top: 10px;">Hybrid mode blends your uploaded CSVs with AI discovery results.</p>
+    </div>
+
+    <div class="sidebar-card">
+      <div class="section-title">🎙️ AI DJ (Afroman v2)</div>
+      <div class="toggle-group">
+        <span class="toggle-label">Voice Narrator</span>
+        <label class="switch">
+          <input type="checkbox" id="aiDjToggle" onchange="updateAiDj()">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <select id="aiDjVoiceSelect" onchange="updateAiDj()" style="width: 100%; background: #0d1117; border: 1px solid var(--border); color: white; padding: 8px; border-radius: 6px;">
+        <option value="Zephyr">Zephyr (Deep)</option>
+        <option value="Puck">Puck (Smooth)</option>
+        <option value="Charon">Charon (Authority)</option>
+      </select>
+    </div>
+
+    <div class="sidebar-card">
+        <div class="section-title">🧠 Engine Tuning</div>
+        <div class="toggle-group">
+          <span class="toggle-label">Smart-Fill (Background)</span>
+          <label class="switch">
+            <input type="checkbox" id="smartFillToggle" onchange="updateSmartFill()">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-group">
+          <span class="toggle-label">🔥 Prioritize New Hits</span>
+          <label class="switch">
+            <input type="checkbox" id="freshnessToggle">
+            <span class="slider"></span>
+          </label>
+        </div>
+    </div>
+
+    <div class="sidebar-card">
+      <div class="section-title">📈 Source Distribution</div>
+      <div id="sourceStats">
+        <!-- JS Populated -->
+      </div>
+    </div>
+
+    <div class="sidebar-card">
+      <div class="section-title">🕹️ Command Hub</div>
+      <div class="hub-grid" style="grid-template-columns: 1fr;">
+        <a href="/player.html" target="_blank" class="hub-link"><span>💿</span> Main Player / Host</a>
+        <a href="/guest.html" target="_blank" class="hub-link"><span>📱</span> Guest Page</a>
+      </div>
+    </div>
+
+    <div class="sidebar-card">
+      <div class="section-title">🧪 The Lab (Test Sites)</div>
+      <div class="hub-grid" style="grid-template-columns: 1fr;">
+        <a href="/test_python.html" target="_blank" class="hub-link"><span>🔍</span> Python Search Lab</a>
+        <a href="/pro_dj_lab.html" target="_blank" class="hub-link"><span>🎧</span> Pro DJ Lab</a>
+        <a href="/test_gatekeeper.html" target="_blank" class="hub-link"><span>🛡️</span> Gatekeeper Lab</a>
+        <a href="/test_gemini.html" target="_blank" class="hub-link"><span>🤖</span> Gemini Lab</a>
+        <a href="/test_radio.html" target="_blank" class="hub-link"><span>📻</span> Radio Lab</a>
+        <a href="/test_shadow.html" target="_blank" class="hub-link"><span>👤</span> Shadow Engine</a>
+      </div>
+    </div>
+  </aside>
 </div>
 
+<script src="/socket.io/socket.io.js"></script>
 <script>
-  // ─── Auth ────────────────────────────────────────────────────────────────
-  let adminPassword = '';
+  let adminPassword = localStorage.getItem('jukebox_admin_pw') || '';
+  let selectedRadioSeed = null;
+  let radioSeedSearchResults = [];
+  const socket = io();
 
-  function login() {
-    adminPassword = document.getElementById('pwInput').value;
-    console.log('Login clicked, password:', adminPassword ? '***' : '(empty)');
-    if (!adminPassword) {
-      document.getElementById('loginError').textContent = 'Enter a password';
-      return;
-    }
-    document.getElementById('loginError').textContent = 'Checking...';
-    
-    // Verify by trying a privileged call
-    fetch('/api/auth/verify', { 
-      method: 'POST',
-      headers: { 'x-admin-password': adminPassword }
-    })
-      .then(r => {
-        console.log('Auth response:', r.status);
-        if (r.ok) {
-          sessionStorage.setItem('admin_pw', adminPassword);
-          document.getElementById('loginScreen').style.display = 'none';
-          document.getElementById('adminUI').style.display = 'flex';
-          initAdmin();
-        } else if (r.status === 403) {
-          document.getElementById('loginError').textContent = 'Wrong password';
-        } else {
-          document.getElementById('loginError').textContent = 'Server error: ' + r.status;
-        }
-      })
-      .catch(err => {
-        document.getElementById('loginError').textContent = 'Connection error';
-        console.error('Login error:', err);
-      });
-  }
-
-  // Check if already logged in when DOM is ready
-  document.addEventListener('DOMContentLoaded', function() {
-    const savedPw = sessionStorage.getItem('admin_pw');
-    if (savedPw) {
-      adminPassword = savedPw;
-      fetch('/api/auth/verify', { 
-        method: 'POST',
-        headers: { 'x-admin-password': adminPassword }
-      })
-        .then(r => {
-          if (r.ok) {
-            document.getElementById('loginScreen').style.display = 'none';
-            document.getElementById('adminUI').style.display = 'flex';
-            initAdmin();
-          } else {
-            throw new Error('Auth failed');
-          }
-        })
-        .catch(() => {
-          adminPassword = '';
-          sessionStorage.removeItem('admin_pw');
-          document.getElementById('loginScreen').style.display = 'block';
-        });
-    }
-  });
-
-  // ─── Init ────────────────────────────────────────────────────────────────
-  let lastSyncTime = Date.now();
-  
-  function initAdmin() {
-    document.getElementById('guestUrl').textContent = window.location.origin + '/guest.html';
-    const socket = io();
-    socket.on('connect', () => {
-      document.getElementById('connDot').classList.add('live');
-      document.getElementById('connLabel').textContent = 'Connected';
-    });
-    socket.on('disconnect', () => {
-      document.getElementById('connDot').classList.remove('live');
-      document.getElementById('connLabel').textContent = 'Disconnected';
-    });
-    socket.on('queueUpdate', ({ queue, currentTrack, targetTrack, aiDjEnabled, aiDjVoice }) => {
-      renderAll(queue, currentTrack, targetTrack, aiDjEnabled, aiDjVoice);
-      lastSyncTime = Date.now();
-    });
-    socket.on('poolUpdate', () => {
+  // ─── Auth ───────────────────────────────────────────────────────────────────
+  async function verifyAuth() {
+    const pw = document.getElementById('adminPw').value;
+    const res = await fetch('/api/auth/verify', { headers: { 'x-admin-password': pw }, method: 'POST' });
+    if (res.ok) {
+      adminPassword = pw;
+      localStorage.setItem('jukebox_admin_pw', pw);
+      document.getElementById('authModal').style.display = 'none';
       loadPool();
-    });
-    
-    // Gentle polling as backup to Socket.io - every 3 seconds
-    setInterval(async () => {
-      try {
-        const res = await fetch('/api/queue');
-        const data = await res.json();
-        renderAll(data.queue, data.currentTrack, data.targetTrack, data.aiDjEnabled, data.aiDjVoice);
-      } catch (e) {
-        // Silent fail
+    } else {
+      alert('Invalid Password');
+    }
+  }
+
+  if (adminPassword) {
+    document.getElementById('authModal').style.display = 'none';
+    loadPool();
+  }
+
+  // ─── Data Loading ────────────────────────────────────────────────────────────
+  async function loadPool() {
+    try {
+      const res = await fetch('/api/pool', { headers: { 'x-admin-password': adminPassword } });
+      const data = await res.json();
+      renderState(data);
+      loadMoods();
+      loadSavedPlaylists();
+    } catch (e) {
+      if (e.message.includes('403')) {
+        document.getElementById('authModal').style.display = 'flex';
       }
-    }, 3000);
+    }
   }
 
-  // ─── Navigation ──────────────────────────────────────────────────────────
-  function showPage(name, el) {
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-    document.getElementById('page-' + name).classList.add('active');
-    if (el) el.classList.add('active');
+  async function loadMoods() {
+    const res = await fetch('/api/pool/moods', { headers: { 'x-admin-password': adminPassword } });
+    const { genres, moods } = await res.json();
+    
+    // Render Genres
+    const genreGrid = document.getElementById('genreGrid');
+    genreGrid.innerHTML = genres.map(g => `
+      <button class="mood-btn${g.active ? ' active' : ''}" onclick="toggleGenre('${g.id}', ${!g.active})">
+        <span>${g.emoji}</span><span>${g.name}</span>
+      </button>
+    `).join('');
+
+    // Render Moods
+    const moodGrid = document.getElementById('moodGrid');
+    moodGrid.innerHTML = moods.map(m => `
+      <button class="mood-btn${m.active ? ' active' : ''}" onclick="toggleMood('${m.id}', ${!m.active})">
+        <span>${m.emoji}</span><span>${m.name}</span>
+      </button>
+    `).join('');
   }
 
-  // ─── Render ──────────────────────────────────────────────────────────────
-  function renderAll(queue, currentTrack, targetTrack, aiDjEnabled, aiDjVoice) {
-    // Sync AI DJ toggles if they come in via socket
-    if (typeof aiDjEnabled !== 'undefined') {
-      document.getElementById('aiDjToggle').checked = aiDjEnabled;
-    }
-    if (aiDjVoice) {
-      document.getElementById('aiDjVoiceSelect').value = aiDjVoice;
-    }
-
-    const displayTrack = targetTrack || currentTrack;
-    const switching = !!(targetTrack && currentTrack && targetTrack.trackId !== currentTrack.trackId);
+  function renderState(data) {
+    // Mode
+    document.querySelectorAll('.radio-option').forEach(opt => {
+      opt.classList.toggle('active', opt.dataset.mode === data.mode);
+    });
 
     // Stats
-    const totalVotes = queue.reduce((sum, i) => sum + i.votes, 0);
-    document.getElementById('statQueue').textContent = queue.length;
-    document.getElementById('statVotes').textContent = totalVotes;
-    const statusText = displayTrack
-      ? (switching ? '⏭ Switching' : displayTrack.isFallback ? '▶ Autoplay' : '▶ Playing')
-      : queue.length ? 'Ready' : 'Idle';
-    document.getElementById('statStatus').textContent = statusText;
-
-    // Now playing
-    const npCard = document.getElementById('nowPlayingCard');
-    const skipBtn = document.getElementById('skipBtn');
-    if (displayTrack) {
-      npCard.style.display = 'block';
-      document.getElementById('npTitle').textContent = displayTrack.title;
-      document.getElementById('npArtist').textContent = displayTrack.artist;
-      document.getElementById('npImg').src = displayTrack.albumArt || '';
-      if (skipBtn) { skipBtn.textContent = '⏭ Skip'; }
-
-      // Show if it's an autoplay (fallback) song
-      const labelEl = document.getElementById('npLabel');
-      if (switching) {
-        labelEl.textContent = 'Switching on host…';
-        labelEl.style.color = '#f59e0b';
-      } else if (displayTrack.isFallback) {
-        labelEl.textContent = '🎵 Autoplay (queue empty)';
-        labelEl.style.color = '#f59e0b';
-      } else {
-        labelEl.textContent = 'Now playing';
-        labelEl.style.color = 'var(--accent)';
-      }
-    } else {
-      npCard.style.display = 'none';
-      if (skipBtn) { skipBtn.textContent = '▶ Start Music'; }
+    document.getElementById('totalPoolCount').innerText = data.totalInPool;
+    const statsHtml = Object.entries(data.sources).map(([key, val]) => `
+      <div class="stat-row">
+        <span class="stat-label">${key.toUpperCase()}</span>
+        <span class="stat-value">${val.total}</span>
+      </div>
+    `).join('');
+    document.getElementById('sourceStats').innerHTML = statsHtml;
+    const clearSavedBtn = document.getElementById('btnClearSavedPool');
+    if (clearSavedBtn) {
+      const savedCount = data.sources?.saved?.total || 0;
+      clearSavedBtn.style.display = savedCount > 0 ? 'flex' : 'none';
+      clearSavedBtn.innerHTML = `<span>🧹</span> Clear Loaded Playlist (${savedCount})`;
     }
 
-    // Dashboard queue (top 5)
-    const dashEl = document.getElementById('dashQueueList');
-    if (!queue.length) {
-      dashEl.innerHTML = '<div class="empty-state">Queue is empty</div>';
+    // Discovery Progress
+    const prog = data.discoveryProgress;
+    const discoUI = document.getElementById('discoveryUI');
+    if (prog && prog.active) {
+      discoUI.style.display = 'block';
+      document.getElementById('activeMoodName').innerText = prog.moodName;
+      document.getElementById('discoveryCount').innerText = `${prog.current} / ${prog.target}`;
+      document.getElementById('discoveryFill').style.width = `${(prog.current / prog.target) * 100}%`;
     } else {
-      dashEl.innerHTML = queue.slice(0, 5).map((item, i) => `
-        <div style="display:flex;align-items:center;gap:12px;background:var(--surface);border-radius:12px;padding:10px;margin-bottom:8px">
-          <span style="font-size:13px;font-weight:700;color:${i===0?'var(--accent)':'var(--muted)'};width:24px">${i+1}</span>
-          <img src="${esc(item.albumArt||'')}" style="width:44px;height:44px;border-radius:8px;object-fit:cover;background:#333">
-          <div style="flex:1;min-width:0">
-            <div style="font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(item.title)}</div>
-            <div style="font-size:12px;color:var(--muted)">${esc(item.artist)}</div>
-          </div>
-          <span style="background:var(--surface2);padding:4px 10px;border-radius:20px;font-size:13px;font-weight:600">▲ ${item.votes}</span>
-          <button class="remove-btn" onclick="removeTrack('${item.id}')">✕</button>
-        </div>`).join('');
+      discoUI.style.display = 'none';
     }
 
-    // Full queue table
-    const tbody = document.getElementById('queueTableBody');
-    const emptyEl = document.getElementById('queueEmpty');
-    if (!queue.length) {
-      tbody.innerHTML = '';
-      emptyEl.style.display = 'block';
+    // Toggles
+    document.getElementById('smartFillToggle').checked = data.smartFillEnabled;
+    document.getElementById('aiDjToggle').checked = data.aiDjEnabled;
+    document.getElementById('aiDjVoiceSelect').value = data.aiDjVoice;
+
+    // Now Playing
+    if (data.currentTrack) {
+      document.getElementById('adminNpTitle').innerText = `${data.currentTrack.artist} - ${data.currentTrack.title}`;
     } else {
-      emptyEl.style.display = 'none';
-      tbody.innerHTML = queue.map((item, i) => `
-        <tr>
-          <td><span class="queue-pos ${i===0?'top':''}">${i+1}</span></td>
-          <td><img class="track-img" src="${esc(item.albumArt||'')}" alt=""></td>
-          <td>
-            <div class="track-name">${esc(item.title)}</div>
-            <div class="track-artist-sm">${esc(item.artist)}</div>
-          </td>
-          <td><span class="vote-count">▲ ${item.votes}</span></td>
-          <td><button class="remove-btn" onclick="removeTrack('${item.id}')">✕</button></td>
-        </tr>`).join('');
+      document.getElementById('adminNpTitle').innerText = 'Nothing Playing';
     }
+
+    // Stash full track list for the playlist-edit "Add from current pool" panel
+    window._currentPoolTracks = data.tracks || [];
+    if (editingPlaylist) renderEditPanel();
+
+    // Track List
+    const tracksHtml = data.tracks.slice(0, 100).map(t => `
+      <div class="track-item">
+        <img src="${t.albumArt || 'https://via.placeholder.com/40'}" class="track-art">
+        <div class="track-info">
+          <div class="track-title">${t.title}</div>
+          <div class="track-artist">${t.artist}</div>
+        </div>
+        <span class="track-source">${t.source}</span>
+        <button class="btn-remove" onclick="removeTrack('${t.trackId}')">✕</button>
+      </div>
+    `).join('');
+    document.getElementById('poolTracks').innerHTML = tracksHtml;
   }
 
-  // ─── Actions ─────────────────────────────────────────────────────────────
-  async function removeTrack(id) {
-    await fetch(`/api/queue/${id}`, {
-      method: 'DELETE',
-      headers: { 'x-admin-password': adminPassword },
+  // ─── Actions ────────────────────────────────────────────────────────────────
+  async function toggleGenre(id, active) {
+    await fetch(`/api/pool/genres/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+      body: JSON.stringify({ active })
     });
+    loadMoods();
   }
 
-  async function skip() {
-    await fetch('/api/skip', { method: 'POST', headers: { 'x-admin-password': adminPassword } });
+  async function toggleMood(id, active) {
+    await fetch(`/api/pool/moods/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+      body: JSON.stringify({ active })
+    });
+    loadMoods();
+  }
+
+  async function populateMoods() {
+    const freshness = document.getElementById('freshnessToggle').checked;
+    await fetch('/api/pool/moods/populate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+      body: JSON.stringify({ freshness })
+    });
+    loadPool();
+  }
+
+  async function buildCustomVibe() {
+    const prompt = document.getElementById('customPrompt').value;
+    if (!prompt) return;
+    await fetch('/api/pool/moods/rebuild/custom', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+      body: JSON.stringify({ prompt })
+    });
+    document.getElementById('customPrompt').value = '';
+    loadPool();
+  }
+
+  function renderSelectedRadioSeed() {
+    const box = document.getElementById('radioSeedSelected');
+    const btn = document.getElementById('btnBuildRadioSeed');
+    if (!selectedRadioSeed) {
+      box.style.display = 'none';
+      box.innerHTML = '';
+      btn.disabled = true;
+      return;
+    }
+
+    box.style.display = 'block';
+    box.innerHTML = `
+      <div style="font-size:11px; text-transform:uppercase; color:var(--muted); margin-bottom:6px;">Selected Seed</div>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <img src="${selectedRadioSeed.albumArt || 'https://via.placeholder.com/40'}" class="track-art">
+        <div class="track-info">
+          <div class="track-title">${selectedRadioSeed.title}</div>
+          <div class="track-artist">${selectedRadioSeed.artist}</div>
+        </div>
+        <span class="track-source">${(selectedRadioSeed.videoType || '').replace('MUSIC_VIDEO_TYPE_', '') || 'YTM'}</span>
+      </div>
+    `;
+    btn.disabled = false;
+  }
+
+  async function searchRadioSeed() {
+    const q = document.getElementById('radioSeedQuery').value.trim();
+    if (!q) {
+      radioSeedSearchResults = [];
+      selectedRadioSeed = null;
+      document.getElementById('radioSeedResults').innerHTML = '';
+      renderSelectedRadioSeed();
+      return;
+    }
+
+    const resultsEl = document.getElementById('radioSeedResults');
+    resultsEl.innerHTML = '<div style="color: var(--muted); padding: 10px;">Searching...</div>';
+
+    try {
+      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+      const tracks = await res.json();
+      if (!res.ok || tracks.error) throw new Error(tracks.error || 'Search failed');
+
+      radioSeedSearchResults = Array.isArray(tracks) ? tracks.slice(0, 10) : [];
+      if (!radioSeedSearchResults.length) {
+        resultsEl.innerHTML = '<div style="color: var(--muted); padding: 10px;">No songs found.</div>';
+        return;
+      }
+
+      resultsEl.innerHTML = radioSeedSearchResults.map((t, i) => `
+        <div class="track-item">
+          <img src="${t.albumArt || 'https://via.placeholder.com/40'}" class="track-art">
+          <div class="track-info">
+            <div class="track-title">${t.title}</div>
+            <div class="track-artist">${t.artist}</div>
+          </div>
+          <span class="track-source">${(t.videoType || '').replace('MUSIC_VIDEO_TYPE_', '') || 'YTM'}</span>
+          <button class="btn-primary" style="padding:6px 12px; font-size:12px;" onclick="selectRadioSeed(${i})">Use</button>
+        </div>
+      `).join('');
+    } catch (e) {
+      resultsEl.innerHTML = `<div style="color:#ff6b6b; padding:10px;">Search failed: ${e.message}</div>`;
+    }
+  }
+
+  function selectRadioSeed(index) {
+    selectedRadioSeed = radioSeedSearchResults[index] || null;
+    renderSelectedRadioSeed();
+  }
+
+  async function buildSeedRadioPool() {
+    if (!selectedRadioSeed) return;
+
+    const btn = document.getElementById('btnBuildRadioSeed');
+    btn.disabled = true;
+
+    try {
+      const res = await fetch('/api/pool/radio-seed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+        body: JSON.stringify({ track: selectedRadioSeed })
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Radio build failed');
+
+      document.getElementById('radioSeedResults').innerHTML =
+        `<div style="color:#7ee787; padding:10px;">Added ${data.added} tracks from ${data.seed.artist} - ${data.seed.title}</div>`;
+      document.getElementById('radioSeedQuery').value = '';
+      selectedRadioSeed = null;
+      radioSeedSearchResults = [];
+      renderSelectedRadioSeed();
+      loadPool();
+    } catch (e) {
+      alert('Radio build failed: ' + e.message);
+      renderSelectedRadioSeed();
+    }
+  }
+
+  async function setMode(mode) {
+    await fetch('/api/pool/mode', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+      body: JSON.stringify({ mode })
+    });
+    loadPool();
+  }
+
+  async function removeTrack(trackId) {
+    await fetch(`/api/pool/cache/${trackId}`, {
+      method: 'DELETE',
+      headers: { 'x-admin-password': adminPassword }
+    });
+    loadPool();
+  }
+
+  async function clearMoodPool() {
+    if (!confirm('Clear all discovery tracks?')) return;
+    await fetch('/api/pool/moods', {
+      method: 'DELETE',
+      headers: { 'x-admin-password': adminPassword }
+    });
+    loadPool();
+  }
+
+  async function clearLoadedPlaylistPool() {
+    if (!confirm('Remove the loaded saved-playlist tracks from the active pool? The saved playlist itself will not be deleted.')) return;
+    try {
+      await apiJSON('/api/pool/saved', { method: 'DELETE' });
+      loadPool();
+    } catch (e) {
+      alert('Clear loaded playlist failed: ' + e.message);
+    }
+  }
+
+  async function skipTrack() {
+    await fetch('/api/skip', {
+      method: 'POST',
+      headers: { 'x-admin-password': adminPassword }
+    });
+    loadPool();
   }
 
   async function clearQueue() {
     if (!confirm('Clear the entire queue?')) return;
-    await fetch('/api/queue', { method: 'DELETE', headers: { 'x-admin-password': adminPassword } });
-  }
-
-  function copyGuestUrl() {
-    navigator.clipboard.writeText(window.location.origin + '/guest.html');
-    alert('URL copied!');
-  }
-
-  function esc(str) {
-    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
-
-  // ─── Pool ─────────────────────────────────────────────────────────────────
-  let poolData = null;
-
-  async function loadPool() {
-    try {
-      const res = await fetch('/api/pool', { headers: { 'x-admin-password': adminPassword } });
-      if (!res.ok) return;
-      poolData = await res.json();
-      renderPool(poolData);
-    } catch (e) { /* silent */ }
-  }
-
-  async function toggleMood(id) {
-    const btn = document.querySelector(`.mood-btn[data-mood-id="${id}"]`);
-    const nowActive = !btn.classList.contains('active');
-    btn.classList.toggle('active', nowActive);
-    btn.style.pointerEvents = 'none';
-    await fetch(`/api/pool/moods/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
-      body: JSON.stringify({ active: nowActive })
+    await fetch('/api/queue', {
+      method: 'DELETE',
+      headers: { 'x-admin-password': adminPassword }
     });
-    btn.style.pointerEvents = '';
-    await loadPool();
+    loadPool();
   }
 
-  async function populateMoodPool() {
-    const activeMoodBtns = document.querySelectorAll('.mood-btn.active');
-    if (activeMoodBtns.length === 0) return alert('Please select at least one mood first!');
-    
-    const btn = document.getElementById('populateMoodBtn');
-    const originalText = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<span>🤖 DJ is curating...</span>';
-
-    try {
-      const res = await fetch('/api/pool/moods/populate', {
-        method: 'POST',
-        headers: { 'x-admin-password': adminPassword }
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Population failed');
-      }
-      // UI will update via Socket.io progress events
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = originalText;
-    }
-  }
-
-  async function buildCustomPool() {
-    const prompt = document.getElementById('customPromptInput').value.trim();
-    if (!prompt) return alert('Please enter a vibe prompt first!');
-    
-    const btn = document.getElementById('customPopulateBtn');
-    const originalText = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<span>🤖 DJ is thinking...</span>';
-
-    try {
-      const res = await fetch('/api/pool/moods/rebuild/custom', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
-        body: JSON.stringify({ prompt })
-      });
-      if (!res.ok) throw new Error('Build failed');
-      await loadPool();
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = originalText;
-    }
-  }
-
-  function updateRatioLabel(value) {
-    const v = parseInt(value);
-    const label = document.getElementById('ratioLabel');
-    if (v === 0)        label.textContent = '100% Discovery';
-    else if (v === 100) label.textContent = '100% Artists';
-    else                label.textContent = `${v}% Artists · ${100 - v}% Discovery`;
-  }
-
-  async function saveRatio(value) {
-    await fetch('/api/pool/ratio', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
-      body: JSON.stringify({ ratio: parseInt(value) })
-    });
-    await loadPool();
-  }
-
-  async function toggleSmartFill(enabled) {
-    await fetch('/api/pool/smartfill', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
-      body: JSON.stringify({ enabled })
-    });
-    await loadPool();
-  }
-
-  async function updateAiDjSettings() {
+  async function updateAiDj() {
     const enabled = document.getElementById('aiDjToggle').checked;
     const voice = document.getElementById('aiDjVoiceSelect').value;
     await fetch('/api/settings/aidj', {
@@ -956,375 +684,242 @@
       headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
       body: JSON.stringify({ enabled, voice })
     });
-    // server broadcasts via socket, so no need for immediate loadPool unless we want to refresh UI stats
   }
 
-  async function toggleRollingDiscovery(enabled) {
-    await fetch('/api/pool/rolling', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
-      body: JSON.stringify({ enabled })
+  // ─── Saved Playlists ────────────────────────────────────────────────────────
+  let editingPlaylist = null; // full playlist object when edit panel is open
+
+  async function apiJSON(url, opts = {}) {
+    const res = await fetch(url, {
+      ...opts,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-password': adminPassword,
+        ...(opts.headers || {}),
+      },
     });
-    await loadPool();
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    return data;
   }
 
-  function renderPool(data) {
-    // AI DJ Settings
-    if (typeof data.aiDjEnabled !== 'undefined') {
-      document.getElementById('aiDjToggle').checked = data.aiDjEnabled;
-    }
-    if (data.aiDjVoice) {
-      document.getElementById('aiDjVoiceSelect').value = data.aiDjVoice;
-    }
-
-    // Mode buttons
-    document.querySelectorAll('.mode-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.mode === data.mode);
-    });
-
-    // Dim sections based on mode
-    document.getElementById('playlistPoolSection').classList.toggle('dimmed', data.mode === 'discovery');
-    document.getElementById('discoveryPoolSection').classList.toggle('dimmed', data.mode === 'playlist');
-
-    // Smart Fill toggles
-    if (data.smartFillEnabled !== undefined) {
-      document.getElementById('smartFillToggle').checked = data.smartFillEnabled;
-    }
-    if (data.rollingDiscoveryEnabled !== undefined) {
-      document.getElementById('rollingToggle').checked = data.rollingDiscoveryEnabled;
-    }
-
-    // Discovery Progress
-    const prog = data.discoveryProgress;
-    const progContainer = document.getElementById('discoveryProgressContainer');
-    if (prog && prog.active) {
-      progContainer.style.display = 'block';
-      document.getElementById('discoveryMoodName').textContent = `Discovering: ${prog.moodName}`;
-      document.getElementById('discoveryCountText').textContent = `${prog.current}/${prog.target}`;
-      const percent = Math.round((prog.current / prog.target) * 100);
-      document.getElementById('discoveryProgressBar').style.width = percent + '%';
-    } else {
-      progContainer.style.display = 'none';
-    }
-
-    // Blend slider
-    if (data.artistDiscoveryRatio !== undefined) {
-      const slider = document.getElementById('ratioSlider');
-      slider.value = data.artistDiscoveryRatio;
-      updateRatioLabel(data.artistDiscoveryRatio);
-    }
-
-    // Mood grid
-    const activeMoods = new Set(data.activeMoodIds || []);
-    const MOODS = [
-      { id: 'party',     name: 'Party',      emoji: '🎉' },
-      { id: 'chill',     name: 'Chill',      emoji: '😌' },
-      { id: 'feelgood',  name: 'Feel Good',  emoji: '😊' },
-      { id: 'workout',   name: 'Workout',    emoji: '💪' },
-      { id: 'hiphop',    name: 'Hip-Hop',    emoji: '🎤' },
-      { id: 'rnb',       name: 'R&B',        emoji: '❤️' },
-      { id: 'pop',       name: 'Pop',        emoji: '⭐' },
-      { id: 'rock',      name: 'Rock',       emoji: '🎸' },
-      { id: 'dance',     name: 'Dance',      emoji: '🕺' },
-      { id: 'throwback', name: 'Throwback',  emoji: '⏮️' },
-      { id: 'summer',    name: 'Summer',     emoji: '☀️' },
-      { id: 'romance',   name: 'Romance',    emoji: '💕' },
-      { id: 'latin',     name: 'Latin',      emoji: '🌶️' },
-      { id: 'focus',     name: 'Focus',      emoji: '🎯' },
-      { id: 'jazz',      name: 'Jazz',       emoji: '🎷' },
-      { id: 'house',        name: 'Deep House',    emoji: '🎛️' },
-      { id: 'organichouse', name: 'Organic House', emoji: '🌅' },
-      { id: 'afrohouse',    name: 'Afro House',    emoji: '🥁' },
-      { id: 'jackinhouse',   name: 'Jackin\' House',  emoji: '📼' },
-      { id: 'croatianeurodance', name: 'Croatian Eurodance', emoji: '🕺' },
-      { id: 'croatiantrash', name: 'Croatian Treš', emoji: '🇭🇷' },
-    ];
-    document.getElementById('moodGrid').innerHTML = MOODS.map(m => `
-      <button class="mood-btn${activeMoods.has(m.id) ? ' active' : ''}" data-mood-id="${m.id}" onclick="toggleMood('${m.id}')">
-        <span>${m.emoji}</span><span>${m.name}</span>
-      </button>`).join('');
-
-    // Stats
-    const discoveryTotal = (data.sources.genre.passing || 0) + (data.sources.artist.passing || 0) + (data.sources.pinned.total || 0);
-    document.getElementById('poolTotal').textContent          = data.totalInPool;
-    document.getElementById('poolCsvCount').textContent       = data.sources.csv.passing ?? data.sources.csv.total ?? 0;
-    document.getElementById('poolDiscoveryCount').textContent = discoveryTotal;
-    document.getElementById('poolPlaylistsCount').textContent = data.csvPlaylists.length;
-
-    // CSV playlists
-    const csvList = document.getElementById('csvPlaylistList');
-    if (data.csvPlaylists.length === 0) {
-      csvList.innerHTML = '<div style="font-size:13px;color:var(--muted);margin-top:4px">No playlists uploaded yet</div>';
-    } else {
-      csvList.innerHTML = data.csvPlaylists.map(p => `
-        <div class="playlist-item">
-          <div>
-            <div class="pname">${esc(p.name)}</div>
-            <div class="pcount">${p.trackCount} tracks</div>
-          </div>
-          <button class="btn btn-danger" style="padding:5px 12px;font-size:12px" onclick="removeCsvPlaylist('${esc(p.name)}')">Remove</button>
-        </div>`).join('');
-    }
-
-    // Artist seeds
-    const seedList = document.getElementById('artistSeedList');
-    if (data.artistSeeds.length === 0) {
-      seedList.innerHTML = '<div style="font-size:13px;color:var(--muted);margin-top:8px">No artist seeds yet</div>';
-    } else {
-      seedList.innerHTML = data.artistSeeds.map(s => `
-        <div class="seed-item">
-          <div style="display:flex;align-items:center;gap:10px">
-            ${s.thumbnail ? `<img src="${esc(s.thumbnail)}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;background:#333;flex-shrink:0">` : ''}
-            <div>
-              <div style="font-weight:600">${esc(s.artistName)}</div>
-              <div style="font-size:11px;color:var(--muted)">max ${s.limit || 20} songs</div>
-            </div>
-          </div>
-          <button class="btn btn-danger" style="padding:5px 12px;font-size:12px" onclick="removeArtist('${esc(s.channelId || s.artistName)}')">Remove</button>
-        </div>`).join('');
-    }
-
-    // Pinned tracks
-    const pinnedList = document.getElementById('pinnedTrackList');
-    const pinned = data.tracks.filter(t => t.source === 'pinned');
-    if (pinned.length === 0) {
-      pinnedList.innerHTML = '<div style="font-size:13px;color:var(--muted);margin-top:8px">No pinned tracks yet</div>';
-    } else {
-      pinnedList.innerHTML = pinned.map(t => `
-        <div class="seed-item">
-          <div style="display:flex;align-items:center;gap:10px;min-width:0">
-            <img src="${esc(t.albumArt||'')}" style="width:32px;height:32px;border-radius:6px;object-fit:cover;background:#333;flex-shrink:0">
-            <div style="min-width:0">
-              <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.title)}</div>
-              <div style="font-size:11px;color:var(--muted)">${esc(t.artist)}</div>
-            </div>
-          </div>
-          <button class="btn btn-danger" style="padding:5px 12px;font-size:12px;flex-shrink:0" onclick="removePinnedTrack('${esc(t.trackId)}')">Remove</button>
-        </div>`).join('');
-    }
-
-    // Full track list
-    const trackList = document.getElementById('poolTrackList');
-    document.getElementById('poolTrackCountLabel').textContent = `(${data.tracks.length})`;
-    if (data.tracks.length === 0) {
-      trackList.innerHTML = '<div class="empty-state">Pool is empty</div>';
-    } else {
-      trackList.innerHTML = data.tracks.map(t => `
-        <div class="pool-track-item">
-          <img src="${esc(t.albumArt||'')}" alt="">
-          <div class="pool-track-info">
-            <div class="name">${esc(t.title)}</div>
-            <div class="artist">${esc(t.artist)}</div>
-          </div>
-          <span class="source-badge ${sourceBadgeClass(t.source)}">${t.source}</span>
-          <button class="remove-btn" onclick="removeFromPool('${esc(t.trackId)}')">✕</button>
-        </div>`).join('');
-    }
-  }
-
-  function sourceBadgeClass(source) {
-    if (source === 'csv')    return 'badge-pinned';
-    if (source === 'artist') return 'badge-artist';
-    if (source === 'pinned') return 'badge-pinned';
-    return 'badge-genre';
-  }
-
-  async function setPoolMode(mode) {
-    const res = await fetch('/api/pool/mode', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
-      body: JSON.stringify({ mode }),
-    });
-    if (res.ok) await loadPool();
-  }
-
-  async function handleCSVUpload(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    const text = await file.text();
-    const name = file.name.replace(/\.csv$/i, '');
-    event.target.value = '';
-    const res = await fetch('/api/pool/csv', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
-      body: JSON.stringify({ name, csv: text }),
-    });
-    if (res.ok) {
-      await loadPool();
-    } else {
-      const { error } = await res.json();
-      alert(error || 'Failed to upload playlist');
-    }
-  }
-
-  // ── YouTube Playlist Import ──────────────────────────────────────────────────
-  async function importYouTubePlaylist() {
-    const raw  = document.getElementById('ytPlaylistInput').value.trim();
-    const name = document.getElementById('ytPlaylistName').value.trim();
-    const statusEl = document.getElementById('ytImportStatus');
-
-    if (!raw)  { statusEl.textContent = 'Enter a playlist URL or ID'; return; }
-    if (!name) { statusEl.textContent = 'Enter a name for this playlist'; return; }
-
-    // Extract playlist ID from URL or use as-is
-    let playlistId = raw;
-    const urlMatch = raw.match(/[?&]list=([A-Za-z0-9_-]+)/);
-    if (urlMatch) playlistId = urlMatch[1];
-
-    statusEl.textContent = 'Importing…';
+  async function loadSavedPlaylists() {
     try {
-      const res = await fetch(`/api/pool/youtube-playlist/${encodeURIComponent(playlistId)}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
-        body: JSON.stringify({ name }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        statusEl.textContent = `✓ Imported ${data.trackCount} tracks`;
-        statusEl.style.color = 'var(--accent)';
-        document.getElementById('ytPlaylistInput').value = '';
-        document.getElementById('ytPlaylistName').value = '';
-        await loadPool();
-      } else {
-        const { error } = await res.json();
-        statusEl.textContent = error || 'Import failed';
-        statusEl.style.color = 'var(--red)';
+      const list = await apiJSON('/api/playlists');
+      document.getElementById('savedCount').innerText = list.length;
+      const el = document.getElementById('savedPlaylistsList');
+      if (list.length === 0) {
+        el.innerHTML = '<div style="color:var(--muted); font-size:12px; padding:8px;">No saved playlists yet — curate a pool, then click 💾 Save Current Pool.</div>';
+        return;
       }
-    } catch (e) {
-      statusEl.textContent = 'Connection error';
-      statusEl.style.color = 'var(--red)';
-    }
-  }
-
-  async function removeCsvPlaylist(name) {
-    const res = await fetch(`/api/pool/csv/${encodeURIComponent(name)}`, {
-      method: 'DELETE',
-      headers: { 'x-admin-password': adminPassword },
-    });
-    if (res.ok) await loadPool();
-  }
-
-
-  let artistSearchTimer = null;
-
-  function searchArtists() {
-    clearTimeout(artistSearchTimer);
-    const q = document.getElementById('artistInput').value.trim();
-    const resultsEl = document.getElementById('artistSearchResults');
-    if (!q) { resultsEl.style.display = 'none'; return; }
-    resultsEl.style.display = 'block';
-    resultsEl.innerHTML = '<div style="padding:10px 14px;font-size:13px;color:var(--muted)">Searching…</div>';
-    artistSearchTimer = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/search-artist?q=${encodeURIComponent(q)}`, {
-          headers: { 'x-admin-password': adminPassword },
-        });
-        const artists = await res.json();
-        if (!artists.length) {
-          resultsEl.innerHTML = '<div style="padding:10px 14px;font-size:13px;color:var(--muted)">No artists found</div>';
-          return;
-        }
-        resultsEl.innerHTML = artists.map(a => `
-          <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--border)">
-            <img src="${esc(a.thumbnail || '')}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;background:#333;flex-shrink:0">
-            <span style="font-size:14px;font-weight:600;flex:1">${esc(a.name)}</span>
-            <div style="display:flex;flex-direction:column;align-items:center;gap:3px;min-width:110px" onclick="event.stopPropagation()">
-              <div style="font-size:11px;color:var(--muted)"><span class="artist-limit-label">20</span> songs</div>
-              <input type="range" min="1" max="100" value="20"
-                     style="width:100%;accent-color:var(--accent);cursor:pointer"
-                     oninput="this.previousElementSibling.querySelector('.artist-limit-label').textContent=this.value">
+      el.innerHTML = list.map(p => {
+        const moodStr = [...(p.moods?.genres || []), ...(p.moods?.moods || [])].join(' + ') || 'no moods';
+        return `
+          <div class="saved-row">
+            <div class="saved-meta">
+              <div class="saved-name">${escapeHtml(p.name)}</div>
+              <div class="saved-sub">${p.trackCount} tracks · ${escapeHtml(moodStr)}</div>
             </div>
-            <button class="btn btn-primary" style="padding:5px 14px;font-size:13px;flex-shrink:0"
-                    data-artist-id="${esc(a.artistId)}" data-artist-name="${esc(a.name)}" data-thumbnail="${esc(a.thumbnail || '')}"
-                    onclick="pickArtistFromEl(this)">Add</button>
-          </div>`).join('');
-      } catch {
-        resultsEl.innerHTML = '<div style="padding:10px 14px;font-size:13px;color:var(--red)">Search failed</div>';
-      }
-    }, 400);
-  }
-
-  async function pickArtist(artistId, artistName, thumbnail, limit = 20) {
-    clearArtistResults();
-    const res = await fetch('/api/pool/artists', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
-      body: JSON.stringify({ artistId, artistName, thumbnail, limit }),
-    });
-    if (res.ok) {
-      await loadPool();
-    } else {
-      const { error } = await res.json().catch(() => ({}));
-      alert(error || 'Failed to add artist');
+            <div class="saved-actions">
+              <button class="btn-tiny-primary" onclick="loadPlaylist('${p.id}', 'replace')">Replace</button>
+              <button class="btn-tiny-amber"   onclick="loadPlaylist('${p.id}', 'merge')">Merge</button>
+              <button class="btn-tiny-outline" onclick="editPlaylist('${p.id}')">Edit</button>
+              <button class="btn-tiny-outline" onclick="renamePlaylist('${p.id}','${escapeJs(p.name)}')">Rename</button>
+              <button class="btn-tiny-danger"  onclick="deletePlaylist('${p.id}','${escapeJs(p.name)}')">Delete</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    } catch (e) {
+      console.error('loadSavedPlaylists:', e.message);
     }
   }
 
-  function pickArtistFromEl(el) {
-    const row = el.closest('div[style]');
-    const slider = row.querySelector('input[type="range"]');
-    const limit = Math.max(1, Math.min(100, parseInt(slider?.value) || 20));
-    pickArtist(el.dataset.artistId, el.dataset.artistName, el.dataset.thumbnail || null, limit);
-  }
-
-  function clearArtistResults() {
-    document.getElementById('artistInput').value = '';
-    document.getElementById('artistSearchResults').style.display = 'none';
-  }
-
-  async function removeArtist(artistId) {
-    const res = await fetch(`/api/pool/artists/${encodeURIComponent(artistId)}`, {
-      method: 'DELETE',
-      headers: { 'x-admin-password': adminPassword },
-    });
-    if (res.ok) await loadPool();
-  }
-
-  async function addPinnedTracks() {
-    const raw = document.getElementById('pinnedInput').value.trim();
-    if (!raw) return;
-    const trackIds = raw.split(/\n|,/).map(s => s.trim()).filter(Boolean);
-    const res = await fetch('/api/pool/tracks', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
-      body: JSON.stringify({ trackIds }),
-    });
-    if (res.ok) {
-      document.getElementById('pinnedInput').value = '';
-      await loadPool();
-    } else {
-      const { error } = await res.json();
-      alert(error || 'Failed to add tracks');
+  async function savePoolPrompt() {
+    const name = prompt('Name for this saved playlist:');
+    if (!name || !name.trim()) return;
+    try {
+      const result = await apiJSON('/api/playlists', {
+        method: 'POST',
+        body: JSON.stringify({ name: name.trim() }),
+      });
+      alert(`Saved "${result.playlist.name}" (${result.playlist.trackCount} tracks)`);
+      loadSavedPlaylists();
+    } catch (e) {
+      alert('Save failed: ' + e.message);
     }
   }
 
-  async function removePinnedTrack(trackId) {
-    const res = await fetch(`/api/pool/tracks/${encodeURIComponent(trackId)}`, {
-      method: 'DELETE',
-      headers: { 'x-admin-password': adminPassword },
-    });
-    if (res.ok) await loadPool();
+  async function loadPlaylist(id, mode) {
+    const verb = mode === 'replace' ? 'Replace the current pool with' : 'Merge into the current pool';
+    if (!confirm(`${verb} this saved playlist?`)) return;
+    try {
+      const result = await apiJSON(`/api/playlists/${id}/load`, {
+        method: 'POST',
+        body: JSON.stringify({ mode }),
+      });
+      console.log(`Loaded (${mode}): ${result.loaded} tracks → pool now ${result.totalInPool}`);
+      loadPool();
+    } catch (e) {
+      alert('Load failed: ' + e.message);
+    }
   }
 
-  async function removeFromPool(trackId) {
-    const res = await fetch(`/api/pool/cache/${encodeURIComponent(trackId)}`, {
-      method: 'DELETE',
-      headers: { 'x-admin-password': adminPassword },
-    });
-    if (res.ok) await loadPool();
+  async function renamePlaylist(id, currentName) {
+    const name = prompt('New name:', currentName);
+    if (!name || name === currentName) return;
+    try {
+      await apiJSON(`/api/playlists/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name: name.trim() }),
+      });
+      loadSavedPlaylists();
+    } catch (e) {
+      alert('Rename failed: ' + e.message);
+    }
   }
 
-  async function rebuildPool() {
-    const btn = document.querySelector('.pool-header-row .btn-ghost');
-    btn.textContent = 'Rebuilding…';
-    btn.disabled = true;
-    const res = await fetch('/api/pool/rebuild', {
-      method: 'POST',
-      headers: { 'x-admin-password': adminPassword },
-    });
-    btn.textContent = '↺ Rebuild Pool';
-    btn.disabled = false;
-    if (res.ok) await loadPool();
+  async function deletePlaylist(id, name) {
+    if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+    try {
+      await apiJSON(`/api/playlists/${id}`, { method: 'DELETE' });
+      if (editingPlaylist && editingPlaylist.id === id) closeEditPanel();
+      loadSavedPlaylists();
+      loadPool();
+    } catch (e) {
+      alert('Delete failed: ' + e.message);
+    }
   }
+
+  async function editPlaylist(id) {
+    try {
+      editingPlaylist = await apiJSON(`/api/playlists/${id}`);
+      renderEditPanel();
+    } catch (e) {
+      alert('Failed to open editor: ' + e.message);
+    }
+  }
+
+  function closeEditPanel() {
+    editingPlaylist = null;
+    document.getElementById('editPanel').style.display = 'none';
+  }
+
+  function renderEditPanel() {
+    const panel = document.getElementById('editPanel');
+    if (!editingPlaylist) { panel.style.display = 'none'; return; }
+    const p = editingPlaylist;
+    const savedIds = new Set(p.tracks.map(t => t.trackId));
+    const poolTracks = (window._currentPoolTracks || []).filter(t => !savedIds.has(t.trackId));
+
+    const moodsBadge = [...(p.moods?.genres || []), ...(p.moods?.moods || [])].join(' + ') || '(no origin moods)';
+
+    panel.style.display = 'block';
+    panel.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <div>
+          <div style="font-weight:700; color:white; font-size:15px;">✏️ Editing: ${escapeHtml(p.name)}</div>
+          <div style="font-size:11px; color:var(--muted); margin-top:2px;">Origin moods: ${escapeHtml(moodsBadge)}</div>
+        </div>
+        <div style="display:flex; gap:6px;">
+          <button class="btn-tiny-amber" onclick="refreshWithMoods('${p.id}')">🔄 Refresh with original moods</button>
+          <button class="btn-tiny-outline" onclick="closeEditPanel()">✕ Close</button>
+        </div>
+      </div>
+
+      <div style="font-size:12px; text-transform:uppercase; color:var(--muted); margin:14px 0 6px;">Tracks in playlist (${p.tracks.length})</div>
+      <div style="max-height:260px; overflow-y:auto; display:flex; flex-direction:column; gap:4px;">
+        ${p.tracks.map(t => `
+          <div style="display:flex; align-items:center; gap:10px; padding:6px 8px; background:#161b22; border-radius:6px;">
+            <div style="flex:1; min-width:0;">
+              <div style="font-size:12px; color:white; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(t.title)}</div>
+              <div style="font-size:11px; color:var(--muted);">${escapeHtml(t.artist)}</div>
+            </div>
+            <button class="btn-tiny-danger" onclick="removePlaylistTrack('${p.id}','${t.trackId}')">✕</button>
+          </div>
+        `).join('') || '<div style="color:var(--muted); font-size:12px; padding:8px;">Empty.</div>'}
+      </div>
+
+      <div style="font-size:12px; text-transform:uppercase; color:var(--muted); margin:18px 0 6px;">
+        Add from current pool (${poolTracks.length} candidates)
+      </div>
+      ${poolTracks.length === 0
+        ? '<div style="color:var(--muted); font-size:12px; padding:8px;">Nothing in the current pool that isn\'t already saved here. Click 🔄 Refresh with original moods to pull fresh candidates.</div>'
+        : `
+          <div style="max-height:240px; overflow-y:auto; display:flex; flex-direction:column; gap:4px; margin-bottom:8px;">
+            ${poolTracks.map(t => `
+              <label style="display:flex; align-items:center; gap:10px; padding:6px 8px; background:#161b22; border-radius:6px; cursor:pointer;">
+                <input type="checkbox" class="addTrackCb" value="${t.trackId}">
+                <div style="flex:1; min-width:0;">
+                  <div style="font-size:12px; color:white; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(t.title)}</div>
+                  <div style="font-size:11px; color:var(--muted);">${escapeHtml(t.artist)}</div>
+                </div>
+              </label>
+            `).join('')}
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button class="btn-tiny-outline" onclick="toggleAllPoolTracks(true)">Select all</button>
+            <button class="btn-tiny-outline" onclick="toggleAllPoolTracks(false)">Clear</button>
+            <button class="btn-tiny-primary" onclick="addSelectedToPlaylist('${p.id}')">➕ Add selected</button>
+          </div>
+        `}
+    `;
+  }
+
+  function toggleAllPoolTracks(checked) {
+    document.querySelectorAll('#editPanel .addTrackCb').forEach(cb => cb.checked = checked);
+  }
+
+  async function removePlaylistTrack(playlistId, trackId) {
+    try {
+      await apiJSON(`/api/playlists/${playlistId}/tracks/${trackId}`, { method: 'DELETE' });
+      editingPlaylist = await apiJSON(`/api/playlists/${playlistId}`);
+      renderEditPanel();
+      loadSavedPlaylists();
+    } catch (e) {
+      alert('Remove failed: ' + e.message);
+    }
+  }
+
+  async function addSelectedToPlaylist(playlistId) {
+    const ids = Array.from(document.querySelectorAll('#editPanel .addTrackCb:checked')).map(cb => cb.value);
+    if (ids.length === 0) { alert('Select at least one track.'); return; }
+    try {
+      const result = await apiJSON(`/api/playlists/${playlistId}/tracks`, {
+        method: 'POST',
+        body: JSON.stringify({ trackIds: ids }),
+      });
+      editingPlaylist = await apiJSON(`/api/playlists/${playlistId}`);
+      renderEditPanel();
+      loadSavedPlaylists();
+      console.log(`Added ${result.added} track(s) to playlist`);
+    } catch (e) {
+      alert('Add failed: ' + e.message);
+    }
+  }
+
+  async function refreshWithMoods(playlistId) {
+    if (!confirm('This will re-activate the playlist\'s original mood combo and pull a fresh Ultra-Fill. Current mood selection will be replaced. Continue?')) return;
+    try {
+      await apiJSON(`/api/playlists/${playlistId}/refresh`, { method: 'POST' });
+      alert('Refresh triggered — watch the discovery banner. Once it completes, new candidates will appear in the edit panel.');
+      loadPool();
+    } catch (e) {
+      alert('Refresh failed: ' + e.message);
+    }
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+  }
+  function escapeJs(s) {
+    return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  }
+
+  // Auto-refresh when pool changes
+  socket.on('poolUpdate', () => loadPool());
+  socket.on('queueUpdate', () => loadPool());
+
 </script>
 </body>
 </html>

@@ -616,8 +616,7 @@
         if (aiDjEnabled && lastDjIntroForTrackId !== next.trackId) {
           lastDjIntroForTrackId = next.trackId;
           log(`🎙 AI DJ: Generating intro for "${next.title}"...`);
-          let p = `Introduce '${next.title}' by ${next.artist}. Just finished '${actualTrack.title}'.`;
-          if (next.artist?.toLowerCase().includes('marko jack')) p = `Posebno najavi Marko Jack pjesmu '${next.title}' za Pavu. Premium sadržaj. Kratko na hrvatskom.`;
+          let p = `Give us a smooth, authoritative intro for '${next.title}' by ${next.artist}. MAX 30 words. Be Afroman: deep voice, rhythmic West Coast flow, no chuckling, just pure smooth confidence. Make it hit.`;
           if (aiDjWs?.readyState === 1) aiDjWs.send(JSON.stringify({ realtimeInput: { text: p } }));
         }
 
@@ -698,7 +697,7 @@
     aiDjWs.onopen = () => {
       log(`🎙 AI DJ: Online (${aiDjVoice})`);
       setStatus('djLabel', 'djDot', 'ok', `AI DJ: ${aiDjVoice} Online`);
-      const inst = "You are a friendly, charismatic local bar DJ. You love music. Speak English and Croatian slang. Keep intros under 8s. Be energetic but chill.";
+      const inst = "You are Afroman. Your voice is deep, smooth, and legendary. Speak with a lazy but authoritative West Coast rhythmic cadence. NO chuckling, NO 'heh-heh'. Just pure, cool confidence. PHONETIC CUES: Use deep resonance, relaxed but clear enunciation. CRITICAL: Keep it engaging but professional. Aim for 2-3 short, impactful sentences. Keep it under 15 seconds. Pure smooth authority.";
       aiDjWs.send(JSON.stringify({ setup: { model: 'models/gemini-3.1-flash-live-preview', generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: aiDjVoice } } } }, systemInstruction: { parts: [{ text: inst }] } } }));
     };
     aiDjWs.onmessage = async e => {

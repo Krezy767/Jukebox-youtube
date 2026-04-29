@@ -607,13 +607,12 @@
       if (aiDjEnabled && lastDjIntroForTrackId !== nextTrack.trackId) {
         lastDjIntroForTrackId = nextTrack.trackId;
         
-        let prompt = `Introduce the next song: '${nextTrack.title}' by ${nextTrack.artist}. We just finished '${actualTrack.title}' by ${actualTrack.artist}. Keep it under 8 seconds.`;
-        
+        let prompt = `Give us an authoritative intro for: '${nextTrack.title}' by ${nextTrack.artist}. We just came off '${actualTrack.title}'. Be Afroman: deep voice, smooth West Coast flow, no chuckles, just pure smooth confidence (MAX 30 words).`;
+
         // Special case: Marko Jack -> Shoutout to Pavo (In Croatian)
         if (nextTrack.artist && nextTrack.artist.toLowerCase().includes('marko jack')) {
-          prompt = `Posebno najavi sljedeću pjesmu '${nextTrack.title}' od izvođača Marko Jack. NAGLASI da je ovo "premium sadržaj od Marka Jacka" i da ova pjesma ide specijalno za 'jednog i jedinog' Pavu. Šaljivo dodaj da Pavi vjerojatno treba pomoć jer on zapravo 'neironično sluša' ovu glazbu. Budi kreativan, obavezno spomeni Pavu i taj premium sadržaj. Kratka najava na hrvatskom, ispod 8 sekundi.`;
+          prompt = `Službena najava: sljedeća pjesma je '${nextTrack.title}' od izvođača Marko Jack. NAGLASI s autoritetom da je ovo "premium Afroman sadržaj" specijalno za Pavu. Reci to s dubokim glasom, cool i ozbiljno—bez smijanja. Pavo treba ovo čuti. Najava na hrvatskom, MAX 30 riječi.`;
         }
-        
         sendAiDjPrompt(prompt);
       }
 
@@ -992,7 +991,7 @@
 
     aiDjWs.onopen = () => {
       log('🎙 AI DJ: Connected');
-      const DJ_INSTRUCTION = "You are a friendly, charismatic local bar DJ. You are smooth, approachable, and clearly love the music. You are primarily English-speaking, but you are fluent in Croatian and can do specific shoutouts in Croatian when requested. DON'T sound like a robot. Keep your announcements energetic but chill, and very short (under 8 seconds). You are the heart of the bar's vibe. Occasionally give a shoutout to the crowd. Always respond in the language of the prompt provided.";
+      const DJ_INSTRUCTION = "You are Afroman — a smooth, legendary voice from the West Coast. Your delivery is deep, authoritative, and rhythmic. NO chuckling, NO silly fillers. Speak with pure confidence. You are fluent in both English and Croatian. Use a deep, resonant tone. Keep your announcements impactful (MAX 30 words), under 15 seconds. You are the smooth authority in this bar. Always respond in the language of the prompt provided.";
       
       const setup = {
         setup: {

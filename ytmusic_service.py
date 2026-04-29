@@ -23,7 +23,28 @@ ytmusic = YTMusic()  # unauthenticated — read-only search/browse is fine
 def best_thumbnail(thumbnails):
     if not thumbnails:
         return None
-    return sorted(thumbnails, key=lambda t: t.get('width', 0), reverse=True)[0].get('url')
+    try:
+        # Handle case where a single dict is passed instead of a list
+        if isinstance(thumbnails, dict):
+            thumbnails = [thumbnails]
+            
+        # Some ytmusicapi versions return simple lists or dicts without width
+        if isinstance(thumbnails[0], str):
+            return thumbnails[0]
+        
+        # Sort by width descending, but handle missing width keys
+        sorted_thumbs = sorted(thumbnails, key=lambda t: t.get('width', 0), reverse=True)
+        url = sorted_thumbs[0].get('url')
+        
+        # Ensure the URL is high-res (YouTube Music trick: replace =w120-h120 with =w544-h544)
+        if url and '=w' in url:
+            import re
+            url = re.sub(r'=w\d+-h\d+', '=w544-h544', url)
+        return url
+    except Exception:
+        if isinstance(thumbnails, list) and len(thumbnails) > 0:
+            return thumbnails[0].get('url') if isinstance(thumbnails[0], dict) else None
+        return None
 
 
 def format_song(item):
@@ -34,7 +55,10 @@ def format_song(item):
     album = item.get('album') or {}
     album_name = album.get('name', '') if isinstance(album, dict) else ''
 
-    duration_seconds = item.get('duration_seconds') or 0
+    duration = item.get('duration') or item.get('duration_seconds') or item.get('length') or 0
+
+    # Radio items use 'thumbnail' (singular), search uses 'thumbnails' (plural)
+    raw_thumbnails = item.get('thumbnails') or item.get('thumbnail')
 
     # videoType values:
     #   MUSIC_VIDEO_TYPE_ATV  — pure audio (what YouTube Music uses natively)
@@ -47,10 +71,35 @@ def format_song(item):
         'title':     item.get('title', 'Unknown'),
         'artist':    artist_name,
         'album':     album_name,
-        'albumArt':  best_thumbnail(item.get('thumbnails')),
-        'duration':  duration_seconds,   # seconds — server.js converts to ms
+        'albumArt':  best_thumbnail(raw_thumbnails),
+        'duration':  duration,   # can be int (seconds) or string ("M:SS")
         'videoType': video_type,
     }
+
+
+def fetch_radio_tracks(video_id, limit):
+    """Try the explicit RDAMVM path first, then fall back to radio=True."""
+    errors = []
+
+    try:
+        results = ytmusic.get_watch_playlist(videoId=video_id, playlistId=f"RDAMVM{video_id}", limit=limit)
+        tracks = results.get('tracks') or []
+        if tracks:
+            return tracks, 'RDAMVM'
+        errors.append('RDAMVM returned no tracks')
+    except Exception as e:
+        errors.append(f'RDAMVM failed: {e}')
+
+    try:
+        results = ytmusic.get_watch_playlist(videoId=video_id, limit=limit, radio=True)
+        tracks = results.get('tracks') or []
+        if tracks:
+            return tracks, 'radio=True'
+        errors.append('radio=True returned no tracks')
+    except Exception as e:
+        errors.append(f'radio=True failed: {e}')
+
+    raise RuntimeError(' | '.join(errors))
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -130,6 +179,30 @@ def playlist_tracks():
     except Exception as e:
         app.logger.error(f'playlist/tracks error: {e}')
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/radio')
+def get_radio():
+    video_id = request.args.get('videoId', '').strip()
+    limit = min(int(request.args.get('limit', 25)), 30)
+    if not video_id:
+        return jsonify({'error': 'videoId required'}), 400
+    try:
+        print(f"📻 [ytmusic] Generating radio for videoId: {video_id}", flush=True)
+        tracks, strategy = fetch_radio_tracks(video_id, limit)
+        formatted = [format_song(t) for t in tracks if t.get('videoId')]
+        
+        # Strictly enforce the limit (ytmusicapi sometimes ignores it)
+        formatted = formatted[:limit]
+        
+        print(f"✅ [ytmusic] Found {len(formatted)} similar tracks via {strategy}", flush=True)
+        return jsonify(formatted)
+    except Exception as e:
+        import traceback
+        err_msg = f"Radio error: {str(e)}\n{traceback.format_exc()}"
+        app.logger.error(err_msg)
+        print(f"❌ [ytmusic] {err_msg}", flush=True)
+        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────

@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shadow Engine — Audio Analysis Lab</title>
+    <script src="https://cdn.jsdelivr.net/npm/essentia.js@0.1.3/dist/essentia-wasm.web.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/essentia.js@0.1.3/dist/essentia.js-core.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: #f1f5f9; padding: 40px; line-height: 1.6; }
+        .container { max-width: 800px; margin: 0 auto; background: #1e293b; padding: 30px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
+        h1 { margin-top: 0; color: #38bdf8; display: flex; align-items: center; gap: 10px; }
+        .input-group { display: flex; gap: 10px; margin-bottom: 20px; }
+        input { flex: 1; padding: 12px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: white; font-size: 16px; }
+        button { padding: 12px 24px; border-radius: 6px; border: none; background: #38bdf8; color: #0f172a; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        button:hover { background: #7dd3fc; }
+        button:disabled { background: #475569; cursor: not-allowed; }
+        .results { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 30px; }
+        .card { background: #0f172a; padding: 15px; border-radius: 8px; border: 1px solid #334155; }
+        .label { font-size: 11px; text-transform: uppercase; color: #94a3b8; letter-spacing: 1px; margin-bottom: 5px; }
+        .value { font-size: 22px; font-weight: bold; color: #38bdf8; }
+        .log { margin-top: 30px; background: #000; padding: 15px; border-radius: 6px; font-family: monospace; font-size: 12px; height: 250px; overflow-y: auto; color: #10b981; border: 1px solid #334155; }
+        .status { margin-bottom: 10px; font-weight: bold; color: #fbbf24; }
+        .pulse { display: inline-block; width: 20px; height: 20px; background: #ef4444; border-radius: 50%; opacity: 0; }
+        .pulse.active { animation: beat 0.2s ease-out; }
+        @keyframes beat { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(2.5); opacity: 0; } }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🎧 Shadow Engine Lab v2.5</h1>
+    <p>Advanced Music Information Retrieval (MIR) Debugger</p>
+    
+    <div class="input-group">
+        <input type="text" id="videoId" placeholder="YouTube Video ID" value="dQw4w9WgXcQ">
+        <button id="analyzeBtn" onclick="startAnalysis()">Start Analysis</button>
+    </div>
+
+    <div class="status" id="status">System Standby</div>
+
+    <div class="results">
+        <div class="card"><div class="label">Detected BPM</div><div class="value" id="bpmValue">--</div></div>
+        <div class="card"><div class="label">First Beat Offset</div><div class="value" id="phaseValue">--</div></div>
+        <div class="card"><div class="label">Musical Key</div><div class="value" id="keyValue">--</div></div>
+        <div class="card"><div class="label">Danceability</div><div class="value" id="danceValue">--</div></div>
+        <div class="card"><div class="label">Physical Energy</div><div class="value" id="energyValue">--</div></div>
+        <div class="card"><div class="label">Inharmonicity (Noise)</div><div class="value" id="inharmValue">--</div></div>
+        <div class="card"><div class="label">Emotional Valence</div><div class="value" id="valenceValue">--</div></div>
+        <div class="card"><div class="label">Loudness (Normalization)</div><div class="value" id="loudValue">--</div></div>
+    </div>
+
+    <div style="margin-top: 20px; text-align: center;">
+        <div id="visualPulse" class="pulse"></div>
+        <div style="font-size: 11px; color: #94a3b8; margin-top: 5px;">Rhythmic Beat Matcher</div>
+    </div>
+
+    <div class="log" id="log"></div>
+</div>
+
+<script>
+    let essentia;
+    let audioCtx;
+    let bpmInterval;
+
+    async function initEssentia() {
+        if (essentia) return;
+        log("Loading Essentia WASM engine...");
+        const wasmModule = await EssentiaWASM();
+        essentia = new Essentia(wasmModule);
+        log("Engine online ✓");
+    }
+
+    function log(m) {
+        const el = document.getElementById('log');
+        el.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${m}</div>`;
+        el.scrollTop = el.scrollHeight;
+    }
+
+    function updateStatus(m) { document.getElementById('status').textContent = m; }
+
+    async function startAnalysis() {
+        const videoId = document.getElementById('videoId').value.trim();
+        if (!videoId) return alert("Missing ID");
+        const btn = document.getElementById('analyzeBtn');
+        btn.disabled = true;
+        try {
+            await initEssentia();
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            updateStatus("📡 Proxying Audio Stream...");
+            const response = await fetch(`/api/audio/${videoId}`);
+            if (!response.ok) throw new Error("Proxy connection failed");
+            const arrayBuffer = await response.arrayBuffer();
+            updateStatus("⚙️ Decoding PCM Data...");
+            const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+            log(`Audio ready: ${Math.round(audioBuffer.duration)}s @ ${audioBuffer.sampleRate}Hz`);
+            updateStatus("🧠 Analyzing Signals...");
+            analyzeBuffer(audioBuffer);
+        } catch (err) {
+            log(`❌ CRITICAL: ${err.message}`);
+            updateStatus("Hardware Exception");
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    function analyzeBuffer(buffer) {
+        const data = buffer.getChannelData(0);
+        try {
+            // 1. RHYTHM (Quick Slices)
+            log("Running RhythmExtractor Consensus...");
+            const slices = [0.2, 0.5, 0.8];
+            const sliceLen = 10 * buffer.sampleRate;
+            const bpmResults = [];
+            for (const pos of slices) {
+                const start = Math.floor(pos * data.length);
+                const vec = essentia.arrayToVector(data.slice(start, start + sliceLen));
+                const res = essentia.RhythmExtractor(vec);
+                bpmResults.push(res.bpm);
+                vec.delete();
+            }
+            const finalBpm = bpmResults.sort((a,b)=>a-b)[1];
+            let displayBpm = Math.round(finalBpm);
+            if (finalBpm > 155) displayBpm = `${Math.round(finalBpm/2)} <span style="font-size:12px;opacity:0.5">(2x)</span>`;
+            else if (finalBpm < 65) displayBpm = `${Math.round(finalBpm*2)} <span style="font-size:12px;opacity:0.5">(0.5x)</span>`;
+
+            // 2. PHASE (Intro Analysis)
+            log("Locating Beat Onset...");
+            const introVec = essentia.arrayToVector(data.slice(0, 12 * buffer.sampleRate));
+            const introRes = essentia.RhythmExtractor(introVec);
+            const finalPhase = essentia.vectorToArray(introRes.ticks)[0] || 0;
+            introVec.delete();
+
+            // 3. VIBE (40s Deep Scan)
+            log("Extracting Deep MIR Features...");
+            const scanStart = Math.min(Math.floor(30 * buffer.sampleRate), Math.floor(data.length * 0.3));
+            const deepSlice = data.slice(scanStart, scanStart + (40 * buffer.sampleRate));
+            const deepVec = essentia.arrayToVector(deepSlice);
+
+            const keyData = essentia.KeyExtractor(deepVec);
+            const danceData = essentia.Danceability(deepVec);
+            const rms = essentia.RMS(deepVec);
+
+            // 4. INHARMONICITY (Safe Frame Analysis)
+            log("Measuring Harmonic Density...");
+            let totalInharm = 0, framesDone = 0;
+            const fSize = 2048;
+            for (let i = 0; i < 5; i++) {
+                const off = Math.floor((deepSlice.length / 5) * i);
+                const frame = deepSlice.slice(off, off + fSize);
+                if (frame.length < fSize) continue;
+                
+                try {
+                    const fv = essentia.arrayToVector(frame);
+                    const win = essentia.Windowing(fv).frame;
+                    const spec = essentia.Spectrum(win).spectrum;
+                    // Safety: use higher threshold to avoid noise-floor exceptions
+                    const pk = essentia.SpectralPeaks(spec, -50, 5000, 50, 20, "frequency", buffer.sampleRate);
+                    
+                    // CRITICAL SAFETY: Inharmonicity throws if < 2 peaks found
+                    if (pk && pk.frequencies && pk.frequencies.size() >= 2) {
+                        const res = essentia.Inharmonicity(pk.frequencies, pk.magnitudes);
+                        totalInharm += res.inharmonicity;
+                        framesDone++;
+                    }
+                    
+                    fv.delete(); win.delete(); spec.delete(); 
+                    if(pk){ pk.frequencies.delete(); pk.magnitudes.delete(); }
+                } catch(e) { log(`Frame ${i} skipped: ${e.message}`); }
+            }
+            const avgInharm = framesDone > 0 ? (totalInharm / framesDone) : 0.1;
+
+            // Final Heuristics
+            const finalEnergy = (rms.rms * 5.0 * (1.0 - (avgInharm * 0.3))).toFixed(2);
+            let valence = keyData.scale === "major" ? 0.70 : 0.30;
+            if (danceData.danceability > 2.0) valence += 0.20;
+            const finalValence = Math.min(0.98, valence).toFixed(2);
+
+            // Loudness
+            let peak = 0;
+            for (let i=0; i<deepSlice.length; i++) { const a = Math.abs(deepSlice[i]); if(a>peak) peak=a; }
+            const suggestedGain = (0.7 / (peak||0.01)).toFixed(2);
+
+            // UI
+            document.getElementById('bpmValue').innerHTML = displayBpm;
+            document.getElementById('phaseValue').textContent = finalPhase.toFixed(3) + "s";
+            document.getElementById('keyValue').textContent = `${keyData.key} ${keyData.scale}`;
+            document.getElementById('danceValue').textContent = danceData.danceability.toFixed(2);
+            document.getElementById('energyValue').textContent = finalEnergy;
+            document.getElementById('inharmValue').textContent = avgInharm.toFixed(3);
+            document.getElementById('valenceValue').textContent = finalValence;
+            document.getElementById('loudValue').innerHTML = `<span style="color:${suggestedGain>1?'#22c55e':'#ef4444'}">${suggestedGain}x</span>`;
+
+            deepVec.delete();
+            updateStatus("Analysis Complete ✓");
+            startPulse(finalBpm, finalPhase);
+        } catch (err) { log(`Loop Error: ${err.message}`); updateStatus("MIR Error"); }
+    }
+
+    function startPulse(bpm, phase) {
+        if (bpmInterval) clearInterval(bpmInterval);
+        const intervalMs = (60 / bpm) * 1000;
+        const pulse = document.getElementById('visualPulse');
+        const nextBeat = Math.ceil(audioCtx.currentTime / (intervalMs/1000)) * (intervalMs/1000) + (phase % (intervalMs/1000));
+        setTimeout(() => {
+            bpmInterval = setInterval(() => {
+                pulse.classList.add('active');
+                setTimeout(() => pulse.classList.remove('active'), 200);
+            }, intervalMs);
+        }, (nextBeat - audioCtx.currentTime) * 1000);
+    }
+</script>
+</body>
+</html>

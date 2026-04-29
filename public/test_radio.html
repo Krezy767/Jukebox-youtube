@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Radio Discovery Lab</title>
+    <style>
+        :root {
+            --bg: #0b0e14;
+            --surface: #161b22;
+            --accent: #58a6ff;
+            --accent-2: #2ea043;
+            --accent-3: #d29922;
+            --text: #c9d1d9;
+            --muted: #8b949e;
+            --border: #30363d;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            max-width: 1180px;
+            width: 100%;
+        }
+        h1 { margin-bottom: 8px; color: white; }
+        p.subtitle { margin-bottom: 32px; color: var(--muted); }
+
+        .input-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 20px;
+            background: var(--surface);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+        input {
+            flex: 1;
+            background: #0d1117;
+            border: 1px solid var(--border);
+            color: white;
+            padding: 12px 16px;
+            border-radius: 6px;
+            font-size: 16px;
+        }
+        button {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        button:hover { opacity: 0.8; }
+        button:disabled { background: var(--border); cursor: not-allowed; }
+        .button-secondary { background: #1f6feb; }
+
+        .seed-card, .debug-card, .column {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+        }
+        .seed-card {
+            display: none;
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+        .seed-label {
+            font-size: 11px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--accent-3);
+            margin-bottom: 10px;
+        }
+        .seed-main {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .seed-art {
+            width: 72px;
+            height: 72px;
+            border-radius: 8px;
+            object-fit: cover;
+            background: #000;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 20px;
+        }
+        .column {
+            overflow: hidden;
+        }
+        .column-header {
+            padding: 16px 18px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 12px;
+        }
+        .column-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: white;
+        }
+        .column-subtitle {
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .results {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 16px;
+        }
+        .track-card {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            background: #0f141b;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            animation: fadeIn 0.3s ease-out both;
+        }
+        .track-art {
+            width: 60px;
+            height: 60px;
+            border-radius: 4px;
+            object-fit: cover;
+            background: #000;
+        }
+        .track-info { flex: 1; }
+        .track-title { font-weight: 600; color: white; margin-bottom: 4px; }
+        .track-artist { font-size: 14px; color: var(--muted); }
+        .track-reason {
+            font-size: 12px;
+            color: #7ee787;
+            margin-top: 5px;
+        }
+        .track-type {
+            font-size: 10px;
+            text-transform: uppercase;
+            background: var(--border);
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: 12px;
+            letter-spacing: 0.05em;
+        }
+        .loader {
+            text-align: center;
+            padding: 40px;
+            color: var(--muted);
+            display: none;
+        }
+        .debug-card {
+            display: none;
+            margin-top: 20px;
+            padding: 18px;
+        }
+        .debug-title {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--accent-2);
+            margin-bottom: 12px;
+        }
+        .debug-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px;
+        }
+        .debug-block {
+            background: #0f141b;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 14px;
+        }
+        .debug-block h3 {
+            margin: 0 0 10px;
+            font-size: 14px;
+        }
+        .chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .chip {
+            font-size: 12px;
+            color: white;
+            background: #1f2937;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 6px 10px;
+        }
+        .playlist-item {
+            padding: 8px 0;
+            border-top: 1px solid rgba(255,255,255,0.06);
+            font-size: 13px;
+        }
+        .playlist-item:first-child { border-top: none; padding-top: 0; }
+        .empty {
+            text-align: center;
+            color: var(--muted);
+            padding: 30px 20px;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @media (max-width: 900px) {
+            body { padding: 20px; }
+            .grid, .debug-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>📻 Radio Discovery Lab</h1>
+    <p class="subtitle">Compare plain YT Music Radio with a chart-boosted hybrid that blends similarity with stable current-hit playlists.</p>
+
+    <div class="input-group">
+        <input type="text" id="videoId" placeholder="Enter YouTube Video ID (e.g., dQw4w9WgXcQ)" value="v7-u37U4T_c">
+        <button id="searchBtn">Run Comparison</button>
+    </div>
+
+    <div id="loader" class="loader">Consulting the YouTube Oracle...</div>
+
+    <div id="seedCard" class="seed-card"></div>
+
+    <div class="grid">
+        <section class="column">
+            <div class="column-header">
+                <div>
+                    <div class="column-title">Standard Radio</div>
+                    <div class="column-subtitle">Pure `RDAMVM` similarity expansion</div>
+                </div>
+            </div>
+            <div id="radioResults" class="results"></div>
+        </section>
+
+        <section class="column">
+            <div class="column-header">
+                <div>
+                    <div class="column-title">Latest Hits Boosted</div>
+                    <div class="column-subtitle">Radio candidates re-ranked with current-hit chart evidence</div>
+                </div>
+            </div>
+            <div id="freshResults" class="results"></div>
+        </section>
+    </div>
+
+    <div id="debugCard" class="debug-card"></div>
+</div>
+
+<script>
+    const searchBtn = document.getElementById('searchBtn');
+    const videoIdInput = document.getElementById('videoId');
+    const radioResultsEl = document.getElementById('radioResults');
+    const freshResultsEl = document.getElementById('freshResults');
+    const loaderEl = document.getElementById('loader');
+    const seedCardEl = document.getElementById('seedCard');
+    const debugCardEl = document.getElementById('debugCard');
+
+    function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, char => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        }[char]));
+    }
+
+    function renderEmpty(el, message) {
+        el.innerHTML = `<div class="empty">${escapeHtml(message)}</div>`;
+    }
+
+    function renderTrackList(el, tracks, { showReason = false } = {}) {
+        if (!tracks || !tracks.length) {
+            renderEmpty(el, 'No tracks found.');
+            return;
+        }
+
+        el.innerHTML = '';
+        tracks.forEach((t, i) => {
+            const card = document.createElement('div');
+            card.className = 'track-card';
+            card.style.animationDelay = `${i * 0.04}s`;
+            card.innerHTML = `
+                <img src="${escapeHtml(t.albumArt || '')}" class="track-art" alt="">
+                <div class="track-info">
+                    <div class="track-title">${escapeHtml(t.title)}</div>
+                    <div class="track-artist">${escapeHtml(t.artist)}</div>
+                    ${showReason && t.reason ? `<div class="track-reason">${escapeHtml(t.reason)}</div>` : ''}
+                </div>
+                <span class="track-type">${escapeHtml((t.videoType || 'unknown').replace('MUSIC_VIDEO_TYPE_', ''))}</span>
+            `;
+            el.appendChild(card);
+        });
+    }
+
+    function renderSeed(seed) {
+        seedCardEl.style.display = 'block';
+        seedCardEl.innerHTML = `
+            <div class="seed-label">Seed Track</div>
+            <div class="seed-main">
+                <img src="${escapeHtml(seed.albumArt || '')}" class="seed-art" alt="">
+                <div class="track-info">
+                    <div class="track-title">${escapeHtml(seed.title)}</div>
+                    <div class="track-artist">${escapeHtml(seed.artist)}</div>
+                </div>
+                <span class="track-type">${escapeHtml((seed.videoType || 'unknown').replace('MUSIC_VIDEO_TYPE_', ''))}</span>
+            </div>
+        `;
+    }
+
+    function renderDebug(debug) {
+        debugCardEl.style.display = 'block';
+        const chartItems = (debug.chartSources || []).map(p => `
+            <div class="playlist-item">
+                <strong>${escapeHtml(p.name)}</strong><br>
+                <span style="color:var(--muted)">query: ${escapeHtml(p.query)} | playlistId: ${escapeHtml(p.playlistId)}</span>
+            </div>
+        `).join('');
+        const artistChips = (debug.anchorArtists || []).map(a => `<span class="chip">${escapeHtml(a)}</span>`).join('');
+        const resultChips = (debug.resultArtists || []).map(a => `<span class="chip">${escapeHtml(a)}</span>`).join('');
+
+        debugCardEl.innerHTML = `
+            <div class="debug-title">How The "Latest Hits Boosted" Side Was Built</div>
+            <div class="debug-grid">
+                <div class="debug-block">
+                    <h3>Anchor Artists</h3>
+                    <div class="chips">${artistChips || '<span class="chip">none</span>'}</div>
+                </div>
+                <div class="debug-block">
+                    <h3>Returned Artists</h3>
+                    <div class="chips">${resultChips || '<span class="chip">none</span>'}</div>
+                </div>
+                <div class="debug-block" style="grid-column: 1 / -1;">
+                    <h3>Chart Sources</h3>
+                    ${chartItems || '<div class="empty">No chart playlists resolved.</div>'}
+                </div>
+                <div class="debug-block" style="grid-column: 1 / -1;">
+                    <h3>Counts</h3>
+                    <div class="chips">
+                        <span class="chip">radio: ${escapeHtml(debug.radioCount || 0)}</span>
+                        <span class="chip">boosted: ${escapeHtml(debug.boostedCount || 0)}</span>
+                        <span class="chip">chart artists: ${escapeHtml(debug.chartArtistCount || 0)}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    async function runLab() {
+        const videoId = videoIdInput.value.trim();
+        if (!videoId) return alert('Enter a Video ID');
+
+        radioResultsEl.innerHTML = '';
+        freshResultsEl.innerHTML = '';
+        seedCardEl.style.display = 'none';
+        debugCardEl.style.display = 'none';
+        loaderEl.style.display = 'block';
+        searchBtn.disabled = true;
+
+        try {
+            const res = await fetch(`/api/test/radio-lab?videoId=${encodeURIComponent(videoId)}&limit=18`);
+            const data = await res.json();
+
+            loaderEl.style.display = 'none';
+            searchBtn.disabled = false;
+
+            if (!res.ok || data.error) {
+                alert('Error: ' + (data.error || 'Unknown error'));
+                return;
+            }
+
+            renderSeed(data.seed);
+            renderTrackList(radioResultsEl, data.radio);
+            renderTrackList(freshResultsEl, data.boosted, { showReason: true });
+            renderDebug(data.debug || {});
+        } catch (err) {
+            loaderEl.style.display = 'none';
+            searchBtn.disabled = false;
+            alert('Failed to fetch: ' + err.message);
+        }
+    }
+
+    searchBtn.onclick = runLab;
+    videoIdInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') runLab();
+    });
+</script>
+
+</body>
+</html>

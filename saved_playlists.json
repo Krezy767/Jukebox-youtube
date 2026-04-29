@@ -1,0 +1,1765 @@
+[
+  {
+    "id": "b2713446-9b26-4b81-9643-3fe90c43089a",
+    "name": "Organic House Chill SUmmer vibes",
+    "createdAt": 1776760732822,
+    "updatedAt": 1776760732822,
+    "moods": {
+      "genres": [
+        "organichouse"
+      ],
+      "moods": [
+        "house",
+        "chill",
+        "summer"
+      ]
+    },
+    "tracks": [
+      {
+        "trackId": "C6HidFp8SRk",
+        "title": "Euphoria",
+        "artist": "Lex Cadoret",
+        "album": "Euphoria",
+        "albumArt": "https://lh3.googleusercontent.com/YPnhvoT7wJRojiHTMQgzBh-rJvH-LcZE7zy-k5j9TTkVQP2S2k2aYs14qodHMmn7-a-oELQnNjuJISQ=w544-h544-l90-rj",
+        "duration": 480000,
+        "explicit": false
+      },
+      {
+        "trackId": "Gt2wnz7oTwo",
+        "title": "Innerbloom",
+        "artist": "RÜFÜS DU SOL",
+        "album": "Bloom",
+        "albumArt": "https://lh3.googleusercontent.com/5wwIuexQa5aWgcrMTzUfZWTl8i8845ptpdlD71jAGKUEDbtfiiUImhXaJYEmyFNZIFEBsjS84sEOez8=w544-h544-l90-rj",
+        "duration": 579000,
+        "explicit": false
+      },
+      {
+        "trackId": "Z2JVMOh55tw",
+        "title": "Remember Me",
+        "artist": "NOIYSE PROJECT",
+        "album": "Remember Me",
+        "albumArt": "https://lh3.googleusercontent.com/KZNUY7M5oqjnv7ETifZGeOXZLNSfdrGGdAO3BlRK-nCW4sZeAmS_jOXbTJkbAyRfblZJtY4xrvc_UT_5=w544-h544-l90-rj",
+        "duration": 521000,
+        "explicit": false
+      },
+      {
+        "trackId": "1e8mzCW0nlU",
+        "title": "Juno Love",
+        "artist": "Nico Morano",
+        "album": "Juno Love",
+        "albumArt": "https://lh3.googleusercontent.com/B98FxVBwuWU5AgOcI9fDijk4xK6JHCSeF-BAJLUOsCaQnK8HWUZJtwCaU-iQvxJTIaawbV8EroiByJMH=w544-h544-l90-rj",
+        "duration": 447000,
+        "explicit": false
+      },
+      {
+        "trackId": "JO94lo3KSZw",
+        "title": "Ekēle",
+        "artist": "Kora (CA)",
+        "album": "Ekēle",
+        "albumArt": "https://lh3.googleusercontent.com/sFgWHNv4pnEaEF7VTHRbI8e5wnADA6xi0ig6R8rDdBO2MpPoQi8Pl1vUaV_g-wIOBXjJb2_RlwVH6sRU=w544-h544-l90-rj",
+        "duration": 378000,
+        "explicit": false
+      },
+      {
+        "trackId": "g6tKjd1y4A0",
+        "title": "Letter For Poly",
+        "artist": "Cornucopia",
+        "album": "Letter for Poly",
+        "albumArt": "https://lh3.googleusercontent.com/ybqpRdjT5JLIBME-kHGEXcDN4LoGqQdmRSd2WkmbLuv0aPFSWQqGkpyLttCtwI8L4dP8Spz0VpeaZ3XD=w544-h544-l90-rj",
+        "duration": 533000,
+        "explicit": false
+      },
+      {
+        "trackId": "71KSwateDn0",
+        "title": "You Look Good",
+        "artist": "Tim Green",
+        "album": "Body Stars",
+        "albumArt": "https://lh3.googleusercontent.com/5PxeO8l3gXwHRkn-fOsIuXz9rH9zvgjXAMIRz1zQ19C0A2uemA53nvMn22zdB4mJK93mUDs4bkJrTltM=w544-h544-l90-rj",
+        "duration": 488000,
+        "explicit": false
+      },
+      {
+        "trackId": "tW2SQdILwFw",
+        "title": "Deep In The Bottom (of Africa)",
+        "artist": "Monique Bingham",
+        "album": "Best of the Last",
+        "albumArt": "https://lh3.googleusercontent.com/Lrr4ne28NAf5xCd72pbWjH3etpLT14mLB9C5OcLy14trqIznlL5DkrS4M7gDj2WkfdFNdUNZpasIyBs=w544-h544-l90-rj",
+        "duration": 394000,
+        "explicit": false
+      },
+      {
+        "trackId": "b71jQ4Mdr6k",
+        "title": "What To Do (&ME Remix)",
+        "artist": "Guy Gerber",
+        "album": "What to Do (Remixes)",
+        "albumArt": "https://lh3.googleusercontent.com/jRzIWJz8ZDO2C2pdV1yS1CEZTal_cFdfV0GlXzohr5gzo2ipu7bikgGaYKA9Nu3QLq7P7y1Qz1sRr58g=w544-h544-l90-rj",
+        "duration": 505000,
+        "explicit": false
+      },
+      {
+        "trackId": "W-twYugkbtE",
+        "title": "Les Gout",
+        "artist": "Rampa",
+        "album": "Les Gout",
+        "albumArt": "https://lh3.googleusercontent.com/k2jiT8pIv-swHSP91FKHOvzu1cQ70gkC-0iz0OIKhedWAThxMI8IIzcQ1dEvN0xVS3HPic36xwj1m9Kf=w544-h544-l90-rj",
+        "duration": 344000,
+        "explicit": false
+      },
+      {
+        "trackId": "-Ag0OCTpRGY",
+        "title": "Real Dancer",
+        "artist": "Gaston Lopez",
+        "album": "Real Dancer",
+        "albumArt": "https://lh3.googleusercontent.com/PU7y77AqL2fL-xvGxbmDBJzd3xlOuT9fCm1_FkBKGmivwFRAPzmBrHG4brjLHC6bWzpMN2BrQnBYBqitFw=w544-h544-l90-rj",
+        "duration": 336000,
+        "explicit": false
+      },
+      {
+        "trackId": "hWG_XlkIiiQ",
+        "title": "York",
+        "artist": "Christian Löffler",
+        "album": "York",
+        "albumArt": "https://lh3.googleusercontent.com/5_p9_Exqx3Xx17TmcihgOQnChptmELRKsgyyYk7lG42jq2h4phqr6bp4r-JvuNVLS-DmfjP1AzbCHp8e=w544-h544-l90-rj",
+        "duration": 477000,
+        "explicit": false
+      },
+      {
+        "trackId": "tXjb8loezCQ",
+        "title": "Neunivai",
+        "artist": "Volen Sentir",
+        "album": "Neunivai",
+        "albumArt": "https://lh3.googleusercontent.com/Sn8pwMHNmPplOmjoUQAnDs2ou5WkSKJVJsNB1_Q8V0puuu1Q_vIu8BmYWfHT-5HjD2QWo8I4Ij3KTNLG=w544-h544-l90-rj",
+        "duration": 439000,
+        "explicit": false
+      },
+      {
+        "trackId": "uawwSHp_C6c",
+        "title": "Attention (Hernan Cattaneo & Mercurio Remix)",
+        "artist": "Hernan Cattaneo",
+        "album": "Attention (Hernan Cattaneo & Mercurio Remix)",
+        "albumArt": "https://lh3.googleusercontent.com/yvvYoplOv9RkLKecKsD17qd1pQtCY9M1G3WhQtxYeaD9xnDEje5ZD4Gn4bxbydzRBzR7JrbuhG1izI3y=w544-h544-l90-rj",
+        "duration": 184000,
+        "explicit": false
+      },
+      {
+        "trackId": "VUVElgaJmrs",
+        "title": "Don't Worry",
+        "artist": "Armen Miran",
+        "album": "Hoom Side of the Sun, Vol. 04",
+        "albumArt": "https://lh3.googleusercontent.com/4T54sCb_MkLDmI4rflIi1Zp63dXloxWJzRVvMAcw4EvxmVKUUwW_U1vlfKeUX40SvwslF4d9xZUGXwtL=w544-h544-l90-rj",
+        "duration": 409000,
+        "explicit": false
+      },
+      {
+        "trackId": "YSTVirThVwY",
+        "title": "Shed My Skin (Radio Edit)",
+        "artist": "D*Note",
+        "album": "Shed My Skin",
+        "albumArt": "https://lh3.googleusercontent.com/q2WTiYN0W7iu02flTNlKZKqYisJvWJrMv-Q4cmq3UPgiFQlwoOPnrgufF_sCnHFd0P3vv_ylxYxOmfBDhA=w544-h544-l90-rj",
+        "duration": 199000,
+        "explicit": false
+      },
+      {
+        "trackId": "IhKk5BWVLg4",
+        "title": "Qallin",
+        "artist": "Serious Dancers",
+        "album": "Qallin",
+        "albumArt": "https://lh3.googleusercontent.com/xUyfEMR-Fc9SY5o6RD3_2O8TUIxHnsJ_p6KKTwm7TTuyQ997-HvLSvBThPPqavM3HxwZ19q6-WjktsUq=w544-h544-l90-rj",
+        "duration": 512000,
+        "explicit": false
+      },
+      {
+        "trackId": "C3ikJNIqg7k",
+        "title": "Trains of Hope",
+        "artist": "Stimming",
+        "album": "Alpe Lusia",
+        "albumArt": "https://lh3.googleusercontent.com/3lrTns348pNCcZSqSp6ixU4I5VwDuPdPJGXiz1pZYOP3-BKtYc6q0HmlL2OUXqIt3Fr8r8u5x3OkQrhdag=w544-h544-l90-rj",
+        "duration": 279000,
+        "explicit": false
+      },
+      {
+        "trackId": "9GQa0Wegmjw",
+        "title": "Dendro",
+        "artist": "Obbie",
+        "album": "Dendro",
+        "albumArt": "https://lh3.googleusercontent.com/xBGn4jI7nNn-oTnNPQXrZh9IIBJs844uvTcz7RZLR2jkrwxx5g04j9KzfI3b1Bu7DtsGxncvm0GhyJ3j=w544-h544-l90-rj",
+        "duration": 443000,
+        "explicit": false
+      },
+      {
+        "trackId": "_L8jatrb5ic",
+        "title": "Beiger - Everlasting [AIR021]",
+        "artist": "Rayzeh",
+        "album": "",
+        "albumArt": "https://i.ytimg.com/vi/_L8jatrb5ic/hq720.jpg?sqp=-oaymwEXCNUGEOADIAQqCwjVARCqCBh4INgESFo&rs=AMzJL3lkLt1RJ9TYPNlpkT7sAP8X4J33Cw",
+        "duration": 589000,
+        "explicit": false
+      },
+      {
+        "trackId": "GSMvsV5v7yA",
+        "title": "Romantica",
+        "artist": "YannaY",
+        "album": "Romantica",
+        "albumArt": "https://lh3.googleusercontent.com/6rQpR_vZIE0I1oB4Ztd4fC4-oLoLoY9NinqK6c0sEZ5IST8sJLtTBrS-5y4lh9FpnhdYogJt6xvhOiVE-g=w544-h544-l90-rj",
+        "duration": 382000,
+        "explicit": false
+      },
+      {
+        "trackId": "04uxT6aA4-c",
+        "title": "Für Die Liebe",
+        "artist": "Lee Burridge",
+        "album": "All Day I Dream 002",
+        "albumArt": "https://lh3.googleusercontent.com/ijDw0Kt1FjadE8hAeyX8NzJj_V3kuImp9Qm9QoZr3LhXjcT18Ecgb9h0_lz2zLGEIxBaDr3C5rIYMJ2BaA=w544-h544-l90-rj",
+        "duration": 539000,
+        "explicit": false
+      },
+      {
+        "trackId": "SUGCTgsKlWc",
+        "title": "Liquid Spirit (Claptone Remix)",
+        "artist": "Gregory Porter",
+        "album": "Liquid Spirit (Claptone Remix)",
+        "albumArt": "https://lh3.googleusercontent.com/bsFh01myCdEtdcxdMF5MjgtuSP2knga2aUQUGjZNzhldhd6tH7GOraOuX88gUNHZJGeTNlCOae7EXJRz=w544-h544-l90-rj",
+        "duration": 384000,
+        "explicit": false
+      },
+      {
+        "trackId": "KIYvVPzzaIE",
+        "title": "Flight of Birds",
+        "artist": "Bedouin",
+        "album": "Summer Sampler 2015",
+        "albumArt": "https://lh3.googleusercontent.com/eTwY3aYH4dOTPuwzIpvxQzjhJ68rPixi9axmCQ68M6m6Nmavy65LzljH-NXqGV6lyypfrkwM4aFTp339=w544-h544-l90-rj",
+        "duration": 549000,
+        "explicit": false
+      },
+      {
+        "trackId": "Obn6QhD3Lyk",
+        "title": "Waterfall",
+        "artist": "Makebo",
+        "album": "Belief",
+        "albumArt": "https://lh3.googleusercontent.com/PSFn24wYLUFnhYG7_b9waSe_Jn6eOuTXgkvv2-4NqX8HI1gzz8sycYp5McjEJFJBsBcYyn7gL5INi1CB=w544-h544-l90-rj",
+        "duration": 512000,
+        "explicit": false
+      },
+      {
+        "trackId": "DxO4qngQAyg",
+        "title": "Glacial",
+        "artist": "Maze 28",
+        "album": "Glacial",
+        "albumArt": "https://lh3.googleusercontent.com/TosztReAVotPWSXE8r4cPMn_vunx2JxLEeid9viQSvMKlvkareSREEROxFlkGDzfX7eB8DSQPrvTEV8=w544-h544-l90-rj",
+        "duration": 504000,
+        "explicit": false
+      },
+      {
+        "trackId": "J2dY43-tV4E",
+        "title": "Nevada",
+        "artist": "Kerala Dust",
+        "album": "Late Sun",
+        "albumArt": "https://lh3.googleusercontent.com/HxioP_JZU_oRM_FQOcMRUXWN2DMZ_2snQVVGA3sgVBtl5w2L8BeT1j5Rh1xMv3sRmc7KmZIxeFfiBcHBNg=w544-h544-l90-rj",
+        "duration": 364000,
+        "explicit": false
+      },
+      {
+        "trackId": "3scvdbhdtv8",
+        "title": "Thinking About You",
+        "artist": "Markus Homm",
+        "album": "Thinking About You",
+        "albumArt": "https://lh3.googleusercontent.com/RFdNrWK4u0AW5wjXBdOCteLK2OKghpQdkDT1qn9-DiNDCWUrtpKT00HeHBuSNsKXBLdWxheZthJvItLP=w544-h544-l90-rj",
+        "duration": 407000,
+        "explicit": false
+      },
+      {
+        "trackId": "ZkrOrHkRv_0",
+        "title": "Balearic",
+        "artist": "H.K.",
+        "album": "Balearic",
+        "albumArt": "https://lh3.googleusercontent.com/HeswI3-vQlkRZwu8Sm3OAF9dFKIrlDN6XSgf5qedRgL7q4XQoMGL-sKQl50wi6ynLnN4TcysLcw22sQ=w544-h544-l90-rj",
+        "duration": 388000,
+        "explicit": false
+      },
+      {
+        "trackId": "8B8jUOmNehQ",
+        "title": "Re-Bokk Robot (Hannah Holland Remix)",
+        "artist": "POSH! The Prince",
+        "album": "Batty Bass Presents: Return to Planet Batty, Rise of the Artists",
+        "albumArt": "https://lh3.googleusercontent.com/P37OMiqtKwl5rgFGufmv0rxbjQZU50IM3KVrgpCNRyURCuKUIL-o8w3g5G4_ntKnYetNYse7WZUubcHu=w544-h544-l90-rj",
+        "duration": 381000,
+        "explicit": false
+      },
+      {
+        "trackId": "eu3rCiclSac",
+        "title": "Relic (Simos Tagias Remix)",
+        "artist": "Alex O'Rion",
+        "album": "Relic",
+        "albumArt": "https://lh3.googleusercontent.com/MZ70-mgo5mDuF-NMDgqxJ0hJsHcHaJHA6hFtSmjv9-fAezEipZ-FDn7-0s3DpSfraHvjExhINX3JfA0=w544-h544-l90-rj",
+        "duration": 544000,
+        "explicit": false
+      },
+      {
+        "trackId": "xwfwIc3rYRk",
+        "title": "No Eyes (feat. Jaw)",
+        "artist": "Claptone",
+        "album": "No Eyes",
+        "albumArt": "https://lh3.googleusercontent.com/pqnyhR3W5q74RSbqJSOaamsU2FziFaHYQUwUN2wLPGMQvLoRP7uawlX3UWIvKWPz4RkeCTmR19gGWIU=w544-h544-l90-rj",
+        "duration": 419000,
+        "explicit": false
+      },
+      {
+        "trackId": "v1zR6vIGGW4",
+        "title": "L'Amour",
+        "artist": "Afgo & Lemon",
+        "album": "L'Amour",
+        "albumArt": "https://lh3.googleusercontent.com/WDUpjvtd5A-_-HjQrf0A-GAVuxqNoalJRpRSVtpHOcuN3pJwGUEhVAhP2PLfDXw2TtyKcHkD60LdKeqE=w544-h544-l90-rj",
+        "duration": 375000,
+        "explicit": false
+      },
+      {
+        "trackId": "ag4nqPjrvp8",
+        "title": "Somebody's Story",
+        "artist": "Solomun",
+        "album": "Black Label",
+        "albumArt": "https://lh3.googleusercontent.com/gNSJfgCuZg8mrUL_gRICCM4krmtG66Ja2M2fSCga53QFBbKbIkctwfYvsOFaKEqfT20rrYkpvDIrU_8=w544-h544-l90-rj",
+        "duration": 549000,
+        "explicit": false
+      },
+      {
+        "trackId": "DiNbw6N1R8I",
+        "title": "Change",
+        "artist": "Stimming",
+        "album": "Change EP",
+        "albumArt": "https://lh3.googleusercontent.com/70xnfCjNf-xqrZNguJthML-ZqAsC_yXsMywwTemzSgaFxcVcI7Sp3hR2NqPIkDxBPg8KAkzWZL8BB6o=w544-h544-l90-rj",
+        "duration": 465000,
+        "explicit": false
+      },
+      {
+        "trackId": "EhsaN9AAb2o",
+        "title": "Her Future Ghost",
+        "artist": "Tim Green",
+        "album": "Her Future Ghost",
+        "albumArt": "https://lh3.googleusercontent.com/1cta8aOnTZiyuu1jWNU_Um77TG_MLaJL5TjhGrHCymQY91681N2f8V60Tk2csNN5fbcbyUlW-LEQrPsb=w544-h544-l90-rj",
+        "duration": 529000,
+        "explicit": false
+      },
+      {
+        "trackId": "dKBueGdx7pA",
+        "title": "Forget",
+        "artist": "Lee Burridge",
+        "album": "Moogami EP",
+        "albumArt": "https://lh3.googleusercontent.com/yoSwz5GlNgkEn6xqhoThwfL25UAFEeweNPpn-nN10lrybA1f9fVSMsw8ljKI40qizyNO0Kabexg9SBmqvg=w544-h544-l90-rj",
+        "duration": 511000,
+        "explicit": false
+      },
+      {
+        "trackId": "XPw3qvC6l3Q",
+        "title": "Into Your Tribe feat. Dominique Fils-Aime, Snow Owl, Frooogs Collective (Bedouin Remix) (feat. Dominique Fils-Aime, Snow Owl & Frooogs Collective)",
+        "artist": "Guy Laliberte",
+        "album": "Into Your Tribe (Bedouin Remix)",
+        "albumArt": "https://lh3.googleusercontent.com/ctvTIJfSqskvdX6PBRswiBdGPLkP4odS0OHOREhUs59wlChitypDoGBjm3Ics9kU8kAbxuFFzsLiDaTbzw=w544-h544-l90-rj",
+        "duration": 455000,
+        "explicit": false
+      },
+      {
+        "trackId": "1myVmc3mNtU",
+        "title": "Nights Out",
+        "artist": "Lamchopz",
+        "album": "Nights Out",
+        "albumArt": "https://lh3.googleusercontent.com/qkAIuQrm5mPPlLiCTeE-_oxmMGE8gQk9lIuQnZIF_omMvHCGZFeejqaJlYy7XXlNF7sTLkjT0yCYpjP-=w544-h544-l90-rj",
+        "duration": 344000,
+        "explicit": false
+      },
+      {
+        "trackId": "qDHK6BIHVVA",
+        "title": "Urpillay (Bedouin Remix)",
+        "artist": "LUM (mx)",
+        "album": "Urpillay EP",
+        "albumArt": "https://lh3.googleusercontent.com/WY1-vZmts8o6hXXHL95zN9v87GuL1wVCtl0YwPt-W7SigT-CSakzLcQKge9A4KUY2bkiksjxZt0zxdE=w544-h544-l90-rj",
+        "duration": 489000,
+        "explicit": false
+      },
+      {
+        "trackId": "0CYfZza_Khk",
+        "title": "Twilight in Tankwa",
+        "artist": "Be Svendsen",
+        "album": "Twilight in Tankwa",
+        "albumArt": "https://lh3.googleusercontent.com/0VkzJ8PC7JmvErmBowKnhihQjQRbjfpzMYJzN7lRuTNPpHXMhhQ7LHTG0Z4ptXSyd_cZQD1KV_Zaz5Oi=w544-h544-l90-rj",
+        "duration": 484000,
+        "explicit": false
+      },
+      {
+        "trackId": "KpAWoFpscjc",
+        "title": "Bo Singi Yo",
+        "artist": "Junior",
+        "album": "Lost Desert & Friends II",
+        "albumArt": "https://lh3.googleusercontent.com/pHbsljHZ9mCBM6pWoL0Mactj0EJ8xdh5cVxUUvnPB7tXqT6Rt-M8TRuDC92sAcYSUzTp4zoRAv0Vvgfr=w544-h544-l90-rj",
+        "duration": 514000,
+        "explicit": false
+      },
+      {
+        "trackId": "4SXs3UDg5qs",
+        "title": "White Tusk",
+        "artist": "Mark Alow",
+        "album": "Golden Tiger",
+        "albumArt": "https://lh3.googleusercontent.com/OLhoUBjUaWDSQr9MDS4ovRvp0TFIIepYMliVeF9XPB4G8XrrovM1Ud13PyYF1hlsGgFJ38OwfYTG6e7yIw=w544-h544-l90-rj",
+        "duration": 520000,
+        "explicit": false
+      },
+      {
+        "trackId": "YFJBYCvPEN0",
+        "title": "Quema",
+        "artist": "Favo",
+        "album": "Quema",
+        "albumArt": "https://lh3.googleusercontent.com/iegZWB5FAYQwVhg_hn-EqH76Nipdw4g3p0dWZdsO5LFZ5vraw6KfysyhYXeL3VO8Eztzi8jshpdrJ858=w544-h544-l90-rj",
+        "duration": 255000,
+        "explicit": false
+      },
+      {
+        "trackId": "5kl_k7aeNqo",
+        "title": "Second Nature",
+        "artist": "Gorgon City",
+        "album": "Second Nature",
+        "albumArt": "https://lh3.googleusercontent.com/zTeoe38sZ7W_yJ-5N1kvGrLbgaJNSMBZvOAH3vS9bSQ1du0_bv0NjXkLeWDDNRHSoFDkgqwaIqC4nbFbKg=w544-h544-l90-rj",
+        "duration": 179000,
+        "explicit": false
+      },
+      {
+        "trackId": "s-UfdT2zOgA",
+        "title": "Ventura",
+        "artist": "Kolter",
+        "album": "Ventura",
+        "albumArt": "https://lh3.googleusercontent.com/gW3ffxKtXdaUpq-P1VMaFsUsBG6Yecr-SARrxS37Glv2keLHb3DfMebigw9sAsgw7ZPVdmJoco0PCNMzaA=w544-h544-l90-rj",
+        "duration": 352000,
+        "explicit": false
+      },
+      {
+        "trackId": "Hrhat3DeNF0",
+        "title": "Africa Jesus (feat. Artwork Sounds)",
+        "artist": "Soulfreakah",
+        "album": "Africa Jesus",
+        "albumArt": "https://lh3.googleusercontent.com/iChi5GQuQGCfk0asb3VWsGrWBUNSHhD6FRh1W0XzNEPJNFoD961i0yXculSlHQZtGOXQXU-EG9bmmBNo=w544-h544-l90-rj",
+        "duration": 470000,
+        "explicit": false
+      },
+      {
+        "trackId": "zaNpqa2LOzU",
+        "title": "Last Day (David August Revision)",
+        "artist": "DAVID AUGUST",
+        "album": "Diynamic Revisited (By David August)",
+        "albumArt": "https://lh3.googleusercontent.com/KwrATHoy8B4jKi8NgbvlpYI26FN0vgjqvm-2jiMPrxjtib4lHeCnM6rgr-VT3oimM9D5tZu6-oQlcNFhxw=w544-h544-l90-rj",
+        "duration": 405000,
+        "explicit": false
+      },
+      {
+        "trackId": "X36QIWl8zt0",
+        "title": "Run",
+        "artist": "Maz",
+        "album": "Run",
+        "albumArt": "https://lh3.googleusercontent.com/CfCuHAIpNDHeAMLym7vEHvn2vbL57jO6mEeB3jq7_xx47KS7jsM-5iTHyG0OhYSdg0s2gquOnrM2ezCj=w544-h544-l90-rj",
+        "duration": 354000,
+        "explicit": false
+      },
+      {
+        "trackId": "EuROlal66yg",
+        "title": "She Likes",
+        "artist": "Dyzen",
+        "album": "METAFLORA II",
+        "albumArt": "https://lh3.googleusercontent.com/3j8MhsfgeEXPBq4mjDlnM0hDuWhigt1Q59FvFkKPOFC5faYo6LcYavOdvMUMlIPoDA-6oy_pibS85T0=w544-h544-l90-rj",
+        "duration": 404000,
+        "explicit": false
+      },
+      {
+        "trackId": "x4e3p2DhX3w",
+        "title": "Anahata (feat. Bukeka)",
+        "artist": "Ajna (BE)",
+        "album": "Anahata",
+        "albumArt": "https://lh3.googleusercontent.com/lCLxsYq8m6wpDkE2XN9qLkHt5jU_XSD50bvIPOhkQF85tc0bWgHhMcHd5kgW20MghLSS7M4OTYZQs9t4=w544-h544-l90-rj",
+        "duration": 411000,
+        "explicit": false
+      },
+      {
+        "trackId": "titUKm8Jvl8",
+        "title": "Vacation to Life",
+        "artist": "Tim Green",
+        "album": "Vacation to Life EP",
+        "albumArt": "https://lh3.googleusercontent.com/baPVddDh0RP5zzaY-p2pjSjq7wQFf-g-L2x7gt2NFxWlTYBFLcawR5E4SDVel6ps5GkhBW8OKjbfDNQ4=w544-h544-l90-rj",
+        "duration": 578000,
+        "explicit": false
+      },
+      {
+        "trackId": "fv1k04L36Y8",
+        "title": "Oriki",
+        "artist": "Shai T",
+        "album": "Oriki",
+        "albumArt": "https://lh3.googleusercontent.com/UuuZgx8QEl9b2bYIjg1I49g6X3c7NuLP_WwbyM5CUxhK0Ag96kPyCEN-fBfK9CPWpR6AN5iIgH6FJ-5V=w544-h544-l90-rj",
+        "duration": 475000,
+        "explicit": false
+      },
+      {
+        "trackId": "qsnJG6zUk-o",
+        "title": "Parachute (Extended Mix)",
+        "artist": "Shimza",
+        "album": "Parachute (Extended Mix)",
+        "albumArt": "https://lh3.googleusercontent.com/KQFwdUTyseFqKA09VzALikyvJBEDA5x9p6h1QoN1oT9AeD2Iy2H0KB6pm2uERDxOg5jkbd-fImlrgaTC=w544-h544-l90-rj",
+        "duration": 336000,
+        "explicit": false
+      },
+      {
+        "trackId": "smMRl8YuWAQ",
+        "title": "The Groove Garden (Extendet Mix)",
+        "artist": "Artic White",
+        "album": "Drift Above",
+        "albumArt": "https://lh3.googleusercontent.com/Q9REt4jGEiB3l9v43LCv2mfsbfMdA1i_FumnedLy-Bith5_WITmZ9sMjPJ0s-tLpUlfGF90Ji7_2wQU=w544-h544-l90-rj",
+        "duration": 560000,
+        "explicit": false
+      },
+      {
+        "trackId": "gS2Dtv74jGo",
+        "title": "Keys Don´t Match (4V4T4R Remix) (feat. Dominique Fricot)",
+        "artist": "Stimming",
+        "album": "Keys Don´t Match (Remixes)",
+        "albumArt": "https://lh3.googleusercontent.com/nN-ZpsOnxsAFpv5spEs2RL9y2XLivaxiZ4Cw7P_4DYlewMUh19c2TewDCN2w48Ml-t2cCrH8rMEDUtcA=w544-h544-l90-rj",
+        "duration": 227000,
+        "explicit": false
+      },
+      {
+        "trackId": "B4KN-9WVbFs",
+        "title": "Bufo",
+        "artist": "Bedouin",
+        "album": "Kindisch Stories Presented by Bedouin",
+        "albumArt": "https://lh3.googleusercontent.com/YJ1OYhUlaAL6PozYIfDkFJN8nT3a3aE5tDK1ya_PJKkf0egkKCGAtLmMhN1s-ePn4b0sP8-hicqUVz4Q=w544-h544-l90-rj",
+        "duration": 519000,
+        "explicit": false
+      },
+      {
+        "trackId": "3sONSUu16bM",
+        "title": "Who Loves The Sun",
+        "artist": "Jo.Ke",
+        "album": "We Love The Sun",
+        "albumArt": "https://lh3.googleusercontent.com/0KI9vU1qtzn4C_rTvQVOMYgPIQNdjFOXwTvfe5DKNjxJqalq8mMDDPfVpZWMlZ0wDA7DeXlwxLXCWQ4=w544-h544-l90-rj",
+        "duration": 563000,
+        "explicit": false
+      },
+      {
+        "trackId": "qFEXjMocJX4",
+        "title": "Who Is He? (Extended Mix) (feat. Kevin Haden)",
+        "artist": "Alaia & Gallo",
+        "album": "Who Is He? (Remixes)",
+        "albumArt": "https://lh3.googleusercontent.com/-OTqB-8Oj1szSiukxI9uNeObCc0jYq5MGbCdghceB3nEfeAh1TWxy5NdOObBWu535o5IrT8SoHTnqSA=w544-h544-l90-rj",
+        "duration": 351000,
+        "explicit": false
+      },
+      {
+        "trackId": "-YRsSl3jjM4",
+        "title": "Worlds Apart",
+        "artist": "Guy J",
+        "album": "Worlds Apart / Surreal",
+        "albumArt": "https://lh3.googleusercontent.com/1AdmQZZKIPJIb77z3uHTGTuYTmJc-U5XLmFSMFdfbq0Z6Yxl2iPMLkHk9Jss65AUfU7qVI-cWVffy1oCPA=w544-h544-l90-rj",
+        "duration": 512000,
+        "explicit": false
+      },
+      {
+        "trackId": "WRHYYyVr7-4",
+        "title": "Eternal Soul",
+        "artist": "Hraach",
+        "album": "Eternal Soul",
+        "albumArt": "https://lh3.googleusercontent.com/alPQrLVOau1UzVOkzGGlAnbAS9Qq91LnLbj6K4GPLTDUBNlir1o6_72rQo-x8ETqrSH9mdayF2xahPwb=w544-h544-l90-rj",
+        "duration": 358000,
+        "explicit": false
+      },
+      {
+        "trackId": "Eh6mUSrqSbo",
+        "title": "Duel",
+        "artist": "Tim Green",
+        "album": "Duel",
+        "albumArt": "https://lh3.googleusercontent.com/kV8svt65SXDxf-B0Tr2H-oDjiPreG6zpitL3lxO9kWD__BXrgF0jZYzyN6VYH2k3cVdB8HGN27PcItnJ=w544-h544-l90-rj",
+        "duration": 575000,
+        "explicit": false
+      },
+      {
+        "trackId": "GpKliDQHkLo",
+        "title": "A Hymn for Your Dreams",
+        "artist": "Lee Burridge",
+        "album": "Leee EP",
+        "albumArt": "https://lh3.googleusercontent.com/ByVBaBn0M25y0KywogJto-xcS5Gjp6VV2qtjnLIIhWqeH2VlBXPFxlee0DtDeLBLXS3bnp7WJGGeH9S4mA=w544-h544-l90-rj",
+        "duration": 462000,
+        "explicit": false
+      },
+      {
+        "trackId": "peRua_hwH6k",
+        "title": "A Deeper Life",
+        "artist": "Chaos In the CBD",
+        "album": "A Deeper Life",
+        "albumArt": "https://lh3.googleusercontent.com/vOIRLz0BZIIvPz5loCMMpL736DOwgPgOEV9t6WiKsAh1_gBlLXanb_cuIyfJ9fTs3TGN_aqmlSoXF3zQ=w544-h544-l90-rj",
+        "duration": 485000,
+        "explicit": false
+      },
+      {
+        "trackId": "7vlpyK4h-EA",
+        "title": "Prepare",
+        "artist": "Stimming",
+        "album": "Alpe Lusia",
+        "albumArt": "https://lh3.googleusercontent.com/3lrTns348pNCcZSqSp6ixU4I5VwDuPdPJGXiz1pZYOP3-BKtYc6q0HmlL2OUXqIt3Fr8r8u5x3OkQrhdag=w544-h544-l90-rj",
+        "duration": 377000,
+        "explicit": false
+      },
+      {
+        "trackId": "9SE1yizPLXg",
+        "title": "Amana",
+        "artist": "Maz",
+        "album": "Amana",
+        "albumArt": "https://lh3.googleusercontent.com/2-48gY3i71T__31Rrx23dilFA1HbPBGhfGbiyThdRWkL9A57LvnI5UjEIoR5699vzP-wPhIRfUrBQrnz=w544-h544-l90-rj",
+        "duration": 339000,
+        "explicit": false
+      },
+      {
+        "trackId": "CYksH50iju4",
+        "title": "Hologram",
+        "artist": "Bedouin",
+        "album": "Bar 25 Music Presents: Sounds Of Sirin",
+        "albumArt": "https://lh3.googleusercontent.com/acjfRjZfBM6IaEKpNwhXhNBYoRO1pzGBMlFvykjTk_SirF9yC6Kb8F1Y8K9Rm6Blc9Yc_KB1KntPSzk0Kw=w544-h544-l90-rj",
+        "duration": 489000,
+        "explicit": false
+      },
+      {
+        "trackId": "ZD4RMymuKTs",
+        "title": "Nepal Sunrise",
+        "artist": "Lost Desert",
+        "album": "Serengeti Nighfall",
+        "albumArt": "https://lh3.googleusercontent.com/ptmRsn3ibroQVyfk28Fubt5aNyOqoFajaGpCZyQKxKEgZ9pa3oyW3QY01gaRYinS_ALe7L8TZ4WOHc4=w544-h544-l90-rj",
+        "duration": 537000,
+        "explicit": false
+      },
+      {
+        "trackId": "9uqCu8i6jYA",
+        "title": "Out Of A Dream",
+        "artist": "Khen",
+        "album": "Manginot EP",
+        "albumArt": "https://lh3.googleusercontent.com/cYcoU3M-eCcupcPBj_hiYm-7t0cGrrV1hpPc64RkKmQIxQP4_kQe8pVNNJOarvxlp3wjlpJee46_MpMGzA=w544-h544-l90-rj",
+        "duration": 486000,
+        "explicit": false
+      },
+      {
+        "trackId": "MXJySqywIzM",
+        "title": "Never Been",
+        "artist": "Gorje Hewek",
+        "album": "Never Been",
+        "albumArt": "https://lh3.googleusercontent.com/5we8s3XSvtTHmimTaDvRjLBvOH_IwYprLa8AuI2feXNfkwJb1Vk1vaIcCU7aHLcx5ukNrU6U6ghdY2le=w544-h544-l90-rj",
+        "duration": 457000,
+        "explicit": false
+      },
+      {
+        "trackId": "AVd6MzDKNh0",
+        "title": "Zola Moya",
+        "artist": "LevyM",
+        "album": "Miwa Miwa EP",
+        "albumArt": "https://lh3.googleusercontent.com/0WsCbkwtLvLelSWQ1oLBA7NACNxsmvmo4f7HKPB9z5VK9IKoUUB1igt_1aUXi4ZDjJbbTwRCQ3GcZUjM=w544-h544-l90-rj",
+        "duration": 200000,
+        "explicit": false
+      },
+      {
+        "trackId": "QQzVaGW1zA0",
+        "title": "Satellite Girl (Tim Green Remix)",
+        "artist": "Lee Burridge",
+        "album": "Leee EP",
+        "albumArt": "https://lh3.googleusercontent.com/ByVBaBn0M25y0KywogJto-xcS5Gjp6VV2qtjnLIIhWqeH2VlBXPFxlee0DtDeLBLXS3bnp7WJGGeH9S4mA=w544-h544-l90-rj",
+        "duration": 562000,
+        "explicit": false
+      },
+      {
+        "trackId": "nG_sKVssVaY",
+        "title": "Yume",
+        "artist": "Lost Desert",
+        "album": "Serengeti Nighfall",
+        "albumArt": "https://lh3.googleusercontent.com/ptmRsn3ibroQVyfk28Fubt5aNyOqoFajaGpCZyQKxKEgZ9pa3oyW3QY01gaRYinS_ALe7L8TZ4WOHc4=w544-h544-l90-rj",
+        "duration": 494000,
+        "explicit": false
+      },
+      {
+        "trackId": "-E-qksu040s",
+        "title": "Rekindle",
+        "artist": "Hraach",
+        "album": "Reconnect",
+        "albumArt": "https://lh3.googleusercontent.com/U8rxCyyr0CF-cby8AYUdb_x060rDGoz0dMP-WjODVqDZz26e-kt-tku-R54ctFckMi463awYWUyayXvJCQ=w544-h544-l90-rj",
+        "duration": 417000,
+        "explicit": false
+      },
+      {
+        "trackId": "Ula0q8BGmAI",
+        "title": "One",
+        "artist": "Lee Burridge",
+        "album": "Melt",
+        "albumArt": "https://lh3.googleusercontent.com/hyC7m6_FhSp5iQnJb64Z7LfZwv5aI0-v0kl5iC5Kc2bh-92K1LJos7lfMurD3lExG7HWQzPee9tsp_4R=w544-h544-l90-rj",
+        "duration": 412000,
+        "explicit": false
+      },
+      {
+        "trackId": "gryV1jkJjQE",
+        "title": "Challenge the Air",
+        "artist": "Stimming",
+        "album": "Challenge Everyday",
+        "albumArt": "https://lh3.googleusercontent.com/GFENp3Om2FO3XxbauAR2eXednyunz2Av7WixchtHegXWOU3KPGgfTV9JWSfK_MR40KDtnKsHmFIN0Ztw=w544-h544-l90-rj",
+        "duration": 442000,
+        "explicit": false
+      },
+      {
+        "trackId": "3vIe-GVdFtw",
+        "title": "So Cold (Extended Mix)",
+        "artist": "Spada",
+        "album": "So Cold",
+        "albumArt": "https://lh3.googleusercontent.com/r4iccEYc8rhXS_djmJA4SJkN2ai0kkqYZmm41DVjaSdsZlajYyO-peTSAqKzWDWj0Cw9af3TDpK0hqPi=w544-h544-l90-rj",
+        "duration": 364000,
+        "explicit": false
+      },
+      {
+        "trackId": "soZS_jv6cfQ",
+        "title": "To Know Nothing",
+        "artist": "Tim Green",
+        "album": "Sea Parade",
+        "albumArt": "https://lh3.googleusercontent.com/YsOlZdzLM7QmEe_vFfm3SLPqeZ0ERtZHMOHN43v4pUu8eRLmSXLI00x3-dISRYnHb4TMrUKwVm1U4uQ=w544-h544-l90-rj",
+        "duration": 512000,
+        "explicit": false
+      },
+      {
+        "trackId": "jOkYNCswsDA",
+        "title": "Mobara",
+        "artist": "Tim Green",
+        "album": "Walking the World EP",
+        "albumArt": "https://lh3.googleusercontent.com/zlQJPxyjZ-sii29zxbb1H_mXJJ5hNuhrezGzdUmBRW5P9mTkimB1u0v5Dhs2Mdbf_RBtJM-JQVmG3_-s8Q=w544-h544-l90-rj",
+        "duration": 518000,
+        "explicit": false
+      },
+      {
+        "trackId": "V4Z8GFUpfzY",
+        "title": "Straight To The Heart",
+        "artist": "Bedouin",
+        "album": "Sight",
+        "albumArt": "https://lh3.googleusercontent.com/Kc22bwaGBTaSRAG7aG0FK5Ttd6jFOelGEzF9Rggrh22niUf9zw6sJzPsmjETXEPbIj8FP5TUHigvpYMbeQ=w544-h544-l90-rj",
+        "duration": 438000,
+        "explicit": false
+      },
+      {
+        "trackId": "xfkI3iVvFac",
+        "title": "Woman in the Wild (Short Edit)",
+        "artist": "Marc Lenz",
+        "album": "Woman in the Wild EP",
+        "albumArt": "https://lh3.googleusercontent.com/QiyZ3iz8Mi4NGNcLmdYJg5lQFU72sZLS0sIw3lOtJhGHSHDlvb1dcQV0AO1vkbnFbmNAgJ8sMiAR164=w544-h544-l90-rj",
+        "duration": 312000,
+        "explicit": false
+      },
+      {
+        "trackId": "H2EEPoTDOoU",
+        "title": "First Summer",
+        "artist": "H.K.",
+        "album": "First Summer",
+        "albumArt": "https://lh3.googleusercontent.com/tnbcao6heGWOfhdQJCMlitGHWeq5gJVaMhJOY5w1UDZT1xP0mk_rHEtbTpSbv4vcYpHLCZQkHzwfi9tKyA=w544-h544-l90-rj",
+        "duration": 381000,
+        "explicit": false
+      },
+      {
+        "trackId": "02TtDLAHJUs",
+        "title": "The Night Is Blue",
+        "artist": "Tim Green",
+        "album": "The Night Is Blue EP",
+        "albumArt": "https://lh3.googleusercontent.com/en3XH_YeDSfKPEAAm-nlQQdUPHj-T0X4Bwe4AJXHP77-iNa__JKA8Wx5jnlipqAC3wP-HWjJiZgQfMLi=w544-h544-l90-rj",
+        "duration": 503000,
+        "explicit": false
+      }
+    ]
+  },
+  {
+    "id": "5db81860-5d6f-4a2c-a850-f6008cf16fcf",
+    "name": "Jeben afro",
+    "createdAt": 1777066006690,
+    "updatedAt": 1777066006690,
+    "moods": {
+      "genres": [
+        "afrohouse"
+      ],
+      "moods": [
+        "summer",
+        "chill"
+      ]
+    },
+    "tracks": [
+      {
+        "trackId": "vkMnF-4g2aY",
+        "title": "Aftermath (Mixed)",
+        "artist": "Culoe De Song",
+        "album": "fabric presents Laurent Garnier: House Odyssey (Mixed)",
+        "albumArt": "https://lh3.googleusercontent.com/OAy_X_O3M5maEJIeIn-XaOCBSsPK9VXiO4hGSCQa_JD1jLR4kqruxKI1w24hdxagvXBtGbV04MHgf0Ao=w544-h544-l90-rj",
+        "duration": 217000,
+        "explicit": false
+      },
+      {
+        "trackId": "V6VOb-WA5CA",
+        "title": "You Need Me (feat. Maxine Ashley & Sun-El Musician)",
+        "artist": "Black Coffee",
+        "album": "Subconsciously",
+        "albumArt": "https://lh3.googleusercontent.com/ENRxAX125z_oltUouJ2vnHCeh_PvMN2iJnUkpanZgrxZgdM01bcTlL3FAIvRsFKUpuNcosHufDloszo=w544-h544-l90-rj",
+        "duration": 376000,
+        "explicit": false
+      },
+      {
+        "trackId": "OH94klhsYC4",
+        "title": "stay",
+        "artist": "Aden Lou",
+        "album": "stay",
+        "albumArt": "https://lh3.googleusercontent.com/3ebIm8vgbriBUfmK2ueNvTtaVhRI42be8a_FZmVEfQnAZiEZxF667e81DCkyKe76Ai1TrwpV7juqnOmm=w544-h544-l90-rj",
+        "duration": 186000,
+        "explicit": false
+      },
+      {
+        "trackId": "5eLkJD1WU-I",
+        "title": "1000 Seconds",
+        "artist": "Blackwhole",
+        "album": "1000 Seconds",
+        "albumArt": "https://lh3.googleusercontent.com/xfznLdKko-SexE1AGoDSECdmkZius15RjP_21ZbdUzOFXNRU_ziLOm796R-R7B3-rR4FHd1LGxHDrhGpdQ=w544-h544-l90-rj",
+        "duration": 369000,
+        "explicit": false
+      },
+      {
+        "trackId": "jEvzE7qqpYw",
+        "title": "Go Around",
+        "artist": "Bongi Dube",
+        "album": "Coffee Bar",
+        "albumArt": "https://lh3.googleusercontent.com/TowIPTBISirfmpTpywqOpyREavcFxWAD_xIaIipyARlCH_sPz3gJKqBLn3qINhyEEPskhUud85O6Odjb=w544-h544-l90-rj",
+        "duration": 395000,
+        "explicit": false
+      },
+      {
+        "trackId": "kTrFY1nsoeA",
+        "title": "Anaya (Afro House x Tropical House & Summer Dance Energy)",
+        "artist": "ZEIA",
+        "album": "Anaya (Afro House x Tropical House & Summer Dance Energy)",
+        "albumArt": "https://yt3.googleusercontent.com/bVXShbq21JOMIt7tBfUbavu_fnfDcfLoWwSh_UkCWIv9v9kTooKh8ZiMJc6CCh6S29gY1pUZ-q2HF3_j=w544-h544-l90-rj",
+        "duration": 255000,
+        "explicit": false
+      },
+      {
+        "trackId": "1VBF3hxOdlw",
+        "title": "Psalm 23",
+        "artist": "Majasto",
+        "album": "Psalm 23",
+        "albumArt": "https://lh3.googleusercontent.com/a85aQzNONZLqxboOIUoSiQzOZLxXhERxGkVniMUii2uA27j-g8ABn2LS8EzvpQHc0eRNOn4DZCDEK4m3jw=w544-h544-l90-rj",
+        "duration": 292000,
+        "explicit": false
+      },
+      {
+        "trackId": "z0bstgJEhVs",
+        "title": "Mama Told Me",
+        "artist": "Da Capo & Hertha Elama",
+        "album": "Indigo Child II: Love & Frequency",
+        "albumArt": "https://lh3.googleusercontent.com/mg7b3JQChfwA6LTkcniK3DtuJQU_jqrtmBU-Tl-aDlsUCSsJIfiVpkFzVNTcCeAI_BHDr6DuxeMZOcTIQw=w544-h544-l90-rj",
+        "duration": 403000,
+        "explicit": false
+      },
+      {
+        "trackId": "xNPWaDgg_so",
+        "title": "Your Love (Antdot Remix)",
+        "artist": "PLS&TY",
+        "album": "Your Love (Antdot Remix)",
+        "albumArt": "https://yt3.googleusercontent.com/pHZdm3MZrpKiYcRRhjNaS3StfL6g_NtZKqMJ6MZNPl9vtKKgUlylKREvTylg8j6qx9CQH454P0yWr49G=w544-h544-l90-rj",
+        "duration": 178000,
+        "explicit": false
+      },
+      {
+        "trackId": "7cNKAJrLFRM",
+        "title": "Jugni (Whoja Vu Techno Rework) (feat. Arif Lohar)",
+        "artist": "Whoja Vu",
+        "album": "Jugni [Whoja Vu Techno Rework]",
+        "albumArt": "https://lh3.googleusercontent.com/x8LPeH0sp-SaqlGtASle72w5inLcarmAL1O3bgbZy1rRiuB-EX2WvWbQxvEWRRuBUXFY3LqEE5HZQYNt=w544-h544-l90-rj",
+        "duration": 256000,
+        "explicit": false
+      },
+      {
+        "trackId": "HM28YMYgrgs",
+        "title": "Webaba feat. Xingondo King (Dazz-B MusiQ & Slaga Remix) (feat. Xingondo King)",
+        "artist": "Busi Mhlongo",
+        "album": "Dazz-B MusiQ & Busi Mhlongo M2KR 2025",
+        "albumArt": "https://lh3.googleusercontent.com/IXYFQzKC_1o9uUJ0zrAwqkqAYoJk2BQ8uShxdEllYu__wpXOgoP-waGn_0BRbRMYDR428shN7OCFBD0=w544-h544-l90-rj",
+        "duration": 307000,
+        "explicit": false
+      },
+      {
+        "trackId": "n2Fcj0mlSAs",
+        "title": "These Tears (Est8 Radio Edit)",
+        "artist": "Spiritchaser",
+        "album": "These Tears 2012",
+        "albumArt": "https://lh3.googleusercontent.com/E6EG5-yt8im0Djla8zHqQEux_WKPuU70JmrcEVbU42TzRuImYIO73YcMqI-K7NbZjtsA-ZjpK0b2EhN89g=w544-h544-l90-rj",
+        "duration": 219000,
+        "explicit": false
+      },
+      {
+        "trackId": "AajNnQPxIEE",
+        "title": "Tanganedzani (feat. VP Talking)",
+        "artist": "Vendaboy Poet",
+        "album": "Tanganedzani",
+        "albumArt": "https://lh3.googleusercontent.com/URcNBoRSh6q3dr9_S3UJYuQ6Ya8THJD4PJzzAPDs-P5Gycq9fYXbIaq4OSAkg7IjhdR-BC1TF35cEJ4=w544-h544-l90-rj",
+        "duration": 211000,
+        "explicit": false
+      },
+      {
+        "trackId": "dnZTlERO4Kk",
+        "title": "Tlhase",
+        "artist": "Cityzeen Ls",
+        "album": "Tlhase",
+        "albumArt": "https://yt3.googleusercontent.com/KwiYZ1DlnpIB7_V9NzOqotmKXlgdFf9qRNkrQEeKhDCDMAJwwEobpmVuG2Enj-G8_RDMCpEltVzzvePdmg=w544-h544-l90-rj",
+        "duration": 131000,
+        "explicit": false
+      },
+      {
+        "trackId": "K3Q7vXWIS7g",
+        "title": "Tamale (feat. Sona Diabate)",
+        "artist": "Mr Raoul K",
+        "album": "Compost Sechshundert - Freshly Composted",
+        "albumArt": "https://lh3.googleusercontent.com/9cgzEf3GRGtZMMJCWXVK-joJ9jmEOMvUd_AGzwOi20vPadFKv3rq24_-q_srzafIsmNE4ZHT5zyIUHQ=w544-h544-l90-rj",
+        "duration": 497000,
+        "explicit": false
+      },
+      {
+        "trackId": "9djPaJenz54",
+        "title": "Mbuyavhuhadzi",
+        "artist": "Asa Tee",
+        "album": "Mbuyavhuhadzi",
+        "albumArt": "https://lh3.googleusercontent.com/0JaO9Ev6vub79-lz-Ll6NyBaxOTOCS0vFzUZ1BWUmr8b4Kw-K2otjYgmghT_r7E2xhwiANlArNeno6M=w544-h544-l90-rj",
+        "duration": 233000,
+        "explicit": false
+      },
+      {
+        "trackId": "EKW-JZ0OjEM",
+        "title": "Kunye",
+        "artist": "Kususa",
+        "album": "Eminence",
+        "albumArt": "https://lh3.googleusercontent.com/sEGhnKhbI_Y-fhyqZSrgf4K1JlA5Uakuyg7e-EDujMGU1Kv0gzl2Iz_DBZG1BImuecyHwLWeav9CtV9m=w544-h544-l90-rj",
+        "duration": 457000,
+        "explicit": false
+      },
+      {
+        "trackId": "M4GQ7TdW1OI",
+        "title": "DO 4 LOVE (Black Coffee Remix)",
+        "artist": "Snoh Aalegra",
+        "album": "DO 4 LOVE (Black Coffee Remix)",
+        "albumArt": "https://lh3.googleusercontent.com/Z7VIRr8imzn00W2xUO6Ip_6h6LB9ONcs8ACBgBHQcy36nTLD5Z-lssbbB7Gnep7ZmkRu6N1NWAyWaE8=w544-h544-l90-rj",
+        "duration": 225000,
+        "explicit": false
+      },
+      {
+        "trackId": "mQb2GuO0StQ",
+        "title": "Way Back Home (feat. Nkosi Nikelo)",
+        "artist": "Majasto",
+        "album": "Lepantsola Fashioneng",
+        "albumArt": "https://lh3.googleusercontent.com/KQ5-Em0NAuc9VPetkG_I9fFucMF4kdEEg15qo0M8ZToKihRw94q_CFbwFBV_DIlimjm22H-uSDNnr5Bt8g=w544-h544-l90-rj",
+        "duration": 262000,
+        "explicit": false
+      },
+      {
+        "trackId": "Zr8l_tewzr4",
+        "title": "Touched The Sky (feat. Mia Tuttavilla)",
+        "artist": "Dennis Ferrer",
+        "album": "The World As I See It",
+        "albumArt": "https://lh3.googleusercontent.com/GJqc91XauvssX-K10FU9VfEwJAavU9RSk2dIRa_XqwOTsheiQfhUogLHGtO0oKNMD90uTNBi1HuRx8yc=w544-h544-l90-rj",
+        "duration": 234000,
+        "explicit": false
+      },
+      {
+        "trackId": "FCyNandYyB0",
+        "title": "Let The Sunshine (feat. 340ml)",
+        "artist": "Culoe De Song",
+        "album": "Elevation",
+        "albumArt": "https://lh3.googleusercontent.com/mk2WzuWEa0S6x8Db3uRmTzr-QOKZIb2vJV01ORZe0SSbZQCL2BGSYFGAfv64b0CyCKNXAf8aSZ65A7Q=w544-h544-s-l90-rj",
+        "duration": 589000,
+        "explicit": false
+      },
+      {
+        "trackId": "_M22nRiSSck",
+        "title": "Swi biwa so(Hi endla so)",
+        "artist": "Papa Khwatsi",
+        "album": "Swi biwa so(Hi endla so)",
+        "albumArt": "https://lh3.googleusercontent.com/HoyGx4Vfr3_LBIY1EmbsLZAIbkbbmANAFUUCAT3nuZrYIKpGRv_-OCFlSzdEBpBJ9X0DFFEpU2WEk-M=w544-h544-l90-rj",
+        "duration": 246000,
+        "explicit": false
+      },
+      {
+        "trackId": "FZhbqe0VxPI",
+        "title": "SBCNCSLY",
+        "artist": "Black Coffee",
+        "album": "Subconsciously",
+        "albumArt": "https://lh3.googleusercontent.com/ENRxAX125z_oltUouJ2vnHCeh_PvMN2iJnUkpanZgrxZgdM01bcTlL3FAIvRsFKUpuNcosHufDloszo=w544-h544-l90-rj",
+        "duration": 385000,
+        "explicit": false
+      },
+      {
+        "trackId": "huKaUqjs49s",
+        "title": "Where We Are Going",
+        "artist": "Da Capo & Boskasie",
+        "album": "Indigo Child II: Love & Frequency",
+        "albumArt": "https://lh3.googleusercontent.com/mg7b3JQChfwA6LTkcniK3DtuJQU_jqrtmBU-Tl-aDlsUCSsJIfiVpkFzVNTcCeAI_BHDr6DuxeMZOcTIQw=w544-h544-l90-rj",
+        "duration": 336000,
+        "explicit": false
+      },
+      {
+        "trackId": "nLinwxOXTpM",
+        "title": "The Soul Cafe",
+        "artist": "Kaylow",
+        "album": "Reach Out",
+        "albumArt": "https://lh3.googleusercontent.com/hevF-yigGw3E-j2n8Dzi77TprpWfFhUivRR7_vjms_f1F0BjVfcT2BXAmH3bwKtbGkRbQ5AVWY_4wUj1=w544-h544-l90-rj",
+        "duration": 269000,
+        "explicit": false
+      },
+      {
+        "trackId": "eV44TlNy2_g",
+        "title": "Dlala Amapantsola",
+        "artist": "Majasto",
+        "album": "Lepantsola Fashioneng",
+        "albumArt": "https://lh3.googleusercontent.com/KQ5-Em0NAuc9VPetkG_I9fFucMF4kdEEg15qo0M8ZToKihRw94q_CFbwFBV_DIlimjm22H-uSDNnr5Bt8g=w544-h544-l90-rj",
+        "duration": 270000,
+        "explicit": false
+      },
+      {
+        "trackId": "Db-P90wULJs",
+        "title": "ilomilo",
+        "artist": "MBNN",
+        "album": "ilomilo",
+        "albumArt": "https://lh3.googleusercontent.com/CgmoROKvJsjyqKq7XoffjjH_2pvpE1uen-wLjD39EVMtQW_50aey3tEaSRtgeabx9f3QbdlgMgqC1RFmzA=w544-h544-l90-rj",
+        "duration": 182000,
+        "explicit": false
+      },
+      {
+        "trackId": "yJEFJf42BU8",
+        "title": "My Lover",
+        "artist": "Da Capo",
+        "album": "Indigo Child II: Love & Frequency",
+        "albumArt": "https://lh3.googleusercontent.com/mg7b3JQChfwA6LTkcniK3DtuJQU_jqrtmBU-Tl-aDlsUCSsJIfiVpkFzVNTcCeAI_BHDr6DuxeMZOcTIQw=w544-h544-l90-rj",
+        "duration": 275000,
+        "explicit": false
+      },
+      {
+        "trackId": "wr62oNJORAI",
+        "title": "Mwaki",
+        "artist": "Zerb",
+        "album": "SURRENDER",
+        "albumArt": "https://lh3.googleusercontent.com/aDWmEWGuFfx5WZ8uYcL0EdAHKTf__pXDr9zuz7wzG8bP0lzGvyaUxwPUlH-P7nWlHnS3HWdLizpuH630Pw=w544-h544-l90-rj",
+        "duration": 209000,
+        "explicit": false
+      },
+      {
+        "trackId": "VBl9L-qSFKw",
+        "title": "Moea (feat. Sannere)",
+        "artist": "Qhomane",
+        "album": "Moea",
+        "albumArt": "https://lh3.googleusercontent.com/RsrrpUCFEr0fW8EikFkgXvieNLP9BzkuxHCqSQisHz06Je0YDF1Hrh_nTfqOMHaDPybm0inMRaqVjVE9=w544-h544-l90-rj",
+        "duration": 142000,
+        "explicit": false
+      },
+      {
+        "trackId": "iFop_Hct5H4",
+        "title": "Funa Wena",
+        "artist": "Da Capo & Ndoni",
+        "album": "Indigo Child II: Love & Frequency",
+        "albumArt": "https://lh3.googleusercontent.com/mg7b3JQChfwA6LTkcniK3DtuJQU_jqrtmBU-Tl-aDlsUCSsJIfiVpkFzVNTcCeAI_BHDr6DuxeMZOcTIQw=w544-h544-l90-rj",
+        "duration": 447000,
+        "explicit": false
+      },
+      {
+        "trackId": "jsDP--R6yAQ",
+        "title": "Mpuelele",
+        "artist": "elijahthe2nd",
+        "album": "Mpuelele",
+        "albumArt": "https://lh3.googleusercontent.com/9mjjh4vzV9ECPa3gcD-sYY-gIYxo_ZsMvo5jKBKG-_UGmbiQEiqDHX3Zu89CBaBmwNo00Ygl3SBpgog=w544-h544-l90-rj",
+        "duration": 204000,
+        "explicit": false
+      },
+      {
+        "trackId": "49Y8bNmzODc",
+        "title": "Ready For You (feat. Celeste)",
+        "artist": "Black Coffee",
+        "album": "Subconsciously",
+        "albumArt": "https://lh3.googleusercontent.com/ENRxAX125z_oltUouJ2vnHCeh_PvMN2iJnUkpanZgrxZgdM01bcTlL3FAIvRsFKUpuNcosHufDloszo=w544-h544-l90-rj",
+        "duration": 269000,
+        "explicit": false
+      },
+      {
+        "trackId": "AQ0Wdd6I45A",
+        "title": "Nako (feat. Starkruss)",
+        "artist": "Majasto",
+        "album": "Nako",
+        "albumArt": "https://lh3.googleusercontent.com/KryGKqNiBLalu-m2bYrvWwN3iLYEK5izr19Xv6qLVjJ9d4bqCXdgytS5BmTblVRO0cLTHJmr1QEvGWJP=w544-h544-l90-rj",
+        "duration": 272000,
+        "explicit": false
+      },
+      {
+        "trackId": "uLZjRUWuHBQ",
+        "title": "Mood Swing (feat. JR Player)",
+        "artist": "Ramzeey",
+        "album": "Tongue Letter",
+        "albumArt": "https://lh3.googleusercontent.com/43OTWsnm7k6GidtIdoNQ3CutparGkP_91YK709PrFCps6tc6SmRAURWioFs8LHn_NHs5LslnI50-U_X8=w544-h544-l90-rj",
+        "duration": 191000,
+        "explicit": false
+      },
+      {
+        "trackId": "RWiBCtdt0b8",
+        "title": "LET ME BE",
+        "artist": "The Second Voice",
+        "album": "LET ME BE",
+        "albumArt": "https://lh3.googleusercontent.com/RFRaJ5Vf9LT6M1U5S1QSWV-1se11GfNfXr8GIr2pyoEttnhIWt8QljZOc42T8_f_wZOfkZSLWT3P3w7J=w544-h544-l90-rj",
+        "duration": 190000,
+        "explicit": false
+      },
+      {
+        "trackId": "KAViQrZYVRs",
+        "title": "Trippy Yeah",
+        "artist": "Jimi Jules",
+        "album": "Trippy Yeah",
+        "albumArt": "https://lh3.googleusercontent.com/8pNmyRAh3FTyG7lJprFkXdpR-WJ_wPoqSwFnK_juykObQCfz6ggeCtK62nR2Vu599hooDb2LOgCI5bo=w544-h544-l90-rj",
+        "duration": 239000,
+        "explicit": false
+      },
+      {
+        "trackId": "FRptCHY4q4k",
+        "title": "Tolo (FNX Omar Remix) (feat. Ahmed Sosso)",
+        "artist": "Jalal Ramdani",
+        "album": "Tolo",
+        "albumArt": "https://lh3.googleusercontent.com/uq5_3e0Ba0vE_wsRqWzhihoCGjcnEMoZe2V8SHcTIO9GbQvbi4VqhXNZqzAGLu5roC7EhdldPt0zUf-e=w544-h544-l90-rj",
+        "duration": 398000,
+        "explicit": false
+      },
+      {
+        "trackId": "pFs8i6lpwFw",
+        "title": "Tems - Me & U (SEVENTH Afro House Remix) (Lyrics)",
+        "artist": "Tems",
+        "album": "",
+        "albumArt": "https://i.ytimg.com/vi/pFs8i6lpwFw/hq720.jpg?sqp=-oaymwEXCNUGEOADIAQqCwjVARCqCBh4INgESFo&rs=AMzJL3lvuPtX3UbZCvKbHZWLi8iX3c8GAQ",
+        "duration": 218000,
+        "explicit": false
+      },
+      {
+        "trackId": "gk9facj2DNA",
+        "title": "Alone",
+        "artist": "Liquideep",
+        "album": "Fabrics of the Heart",
+        "albumArt": "https://lh3.googleusercontent.com/IgyPw4XlHOm7KsY-ELoKmJtpJswjWE2dlC3EuOZ32EFycib_93aUsj9E29vIyVc0-tGmkNwgTtnbsP-X=w544-h544-l90-rj",
+        "duration": 217000,
+        "explicit": false
+      },
+      {
+        "trackId": "EiJT7oi7g4w",
+        "title": "Sys Die Beste (feat. Danwill Riddims)",
+        "artist": "I-Greezo",
+        "album": "Sys Die Beste",
+        "albumArt": "https://lh3.googleusercontent.com/aAXyQa--6cm5FCs1nFrFwIdIh7QW7B2HcevHpXtk325f7egkudKfoK7a_YwXKanFKLJnqNnKs3K-wNmI=w544-h544-l90-rj",
+        "duration": 156000,
+        "explicit": false
+      },
+      {
+        "trackId": "FRjHMohUaag",
+        "title": "Bring On The Night (Rocco's TroDeep Remix)",
+        "artist": "The Cloudkickers",
+        "album": "Bring On The Night",
+        "albumArt": "https://lh3.googleusercontent.com/zwfDS-IwlRnrgtwmWguFT4L71XNUX7v_m2_sJl4_dRkA0uSjzFmIELzqGr5gSLsSoe9GYofoQiPokF1P=w544-h544-l90-rj",
+        "duration": 450000,
+        "explicit": false
+      },
+      {
+        "trackId": "ApeMkAd9cP0",
+        "title": "Bara (Dub) (feat. Ahmed Sosso)",
+        "artist": "Mr Raoul K",
+        "album": "African Paradigm EP III with Pablo Fierro and Manoo",
+        "albumArt": "https://lh3.googleusercontent.com/8xlnkRIPaCQo6SyPr-HvUzUddadgE9mNvCtZ5pfnc-RhX6fLQAM1Y-dXe5zeR1WM1L2chQ06Kl_5Bs4=w544-h544-l90-rj",
+        "duration": 450000,
+        "explicit": false
+      },
+      {
+        "trackId": "krfiO_FqdkI",
+        "title": "Pretty Disaster (Da Capo Remix)",
+        "artist": "Moneoa",
+        "album": "Coming from Going To",
+        "albumArt": "https://lh3.googleusercontent.com/Kzx7hyTuTeHzRLsQpun3VSO2gGLw7TlUCOMphsPDq8CxL070bdNbFb7zBdbMIdD3G1Yy9lshL7OW4kg=w544-h544-l90-rj",
+        "duration": 461000,
+        "explicit": false
+      },
+      {
+        "trackId": "cgKvsJCCU1w",
+        "title": "Summer Breeze (Fka Mash Re-glitch Edit)",
+        "artist": "N'Dinga Gaba",
+        "album": "Summer Breeze (Fka Mash Remixes)",
+        "albumArt": "https://lh3.googleusercontent.com/Tyy8k2FYWeCHhyY9-3VFQ9ucUGo5QY6joh8VOstUViKY9FvnY7VK4grgX1LnoaEZnqSMxMdhBtAfjTUA=w544-h544-l90-rj",
+        "duration": 210000,
+        "explicit": false
+      },
+      {
+        "trackId": "dttCwzk6Odk",
+        "title": "Amazwi",
+        "artist": "Intabayasedubai",
+        "album": "Amazwi",
+        "albumArt": "https://lh3.googleusercontent.com/g15ktcdXy1bQmKrQ1UD5kN3DGExj0sqop0uIV6D4U4SAnynzx0hzV67XmXGc3dRA9j_Tx6cOkbhIK2z5=w544-h544-l90-rj",
+        "duration": 238000,
+        "explicit": false
+      },
+      {
+        "trackId": "r8x2NhviwKQ",
+        "title": "Botle Ba Ngoanenoa (feat. SANNERE)",
+        "artist": "Wave Rhyder",
+        "album": "Botle Ba Ngoanenoa",
+        "albumArt": "https://lh3.googleusercontent.com/E59tjLLhIRCjTBt7MNZMF11DSfVxRfFA2zsR8GEFHOdTgmBj9UW6ErheVlCx1Q8yvWQizLnTGnTE-PUj7A=w544-h544-l90-rj",
+        "duration": 179000,
+        "explicit": false
+      },
+      {
+        "trackId": "nkYZh0EPbeU",
+        "title": "Vagabundo",
+        "artist": "Tayllor",
+        "album": "Vagabundo",
+        "albumArt": "https://lh3.googleusercontent.com/XZRWriuTCyUDLeAT8mRfy19V4n2rM3lWwrPFvV0AhGanEhSDhR7O7C1VR2AXXDpn3TRRecmHdGD4Jed7=w544-h544-l90-rj",
+        "duration": 224000,
+        "explicit": false
+      },
+      {
+        "trackId": "PpuU38LnpKU",
+        "title": "Vuka (feat. Thukuthela)",
+        "artist": "Oscar Mbo",
+        "album": "Vuka",
+        "albumArt": "https://lh3.googleusercontent.com/MBMAsx7MVhSSRwpdAY2homUHOnjMagIEBwg6aO5yj8F3I4I3x3QojS6HDK5Bx_-BaR1fFSz8joN_zs_A=w544-h544-l90-rj",
+        "duration": 328000,
+        "explicit": false
+      },
+      {
+        "trackId": "NgXasD-ey04",
+        "title": "Souvenir",
+        "artist": "Francois A",
+        "album": "Today Is Tomorrow",
+        "albumArt": "https://lh3.googleusercontent.com/p8y1-dogI71KFqVWbJZkWCWwlx6mmd94w-SUWFGkz90wHV9dBmYsiY3fTvtsCTtFu0j0hN2CqoO7q41scA=w544-h544-l90-rj",
+        "duration": 460000,
+        "explicit": false
+      },
+      {
+        "trackId": "IvYWFDXsUmw",
+        "title": "Let Me Go (Culoe De Song Zulu Spirit Mix) (feat. Culoe De Song)",
+        "artist": "Reggie Dokes",
+        "album": "A Giant Leap",
+        "albumArt": "https://lh3.googleusercontent.com/YZ7j1iFYOQ-Jtz1T8Gy5MN92wnRCKZfR22rqMMf4SGjebqFORf2R-1kHOK5dnIlJbpI_M7-NTXUR6RSY=w544-h544-s-l90-rj",
+        "duration": 434000,
+        "explicit": false
+      },
+      {
+        "trackId": "Kir3WQWlvFg",
+        "title": "Phantom",
+        "artist": "Brascon",
+        "album": "Phantom",
+        "albumArt": "https://lh3.googleusercontent.com/VoM2XXLJS5ViLoCRCeU2ajCMUjNEWq-mMDASqDV4PJC2iFCAEc5PohJaqk2Ww9nlZr9ScZlvLkAuXfQ=w544-h544-l90-rj",
+        "duration": 233000,
+        "explicit": false
+      },
+      {
+        "trackId": "lIfjQfebsXE",
+        "title": "Yini Ngawe (feat. Shota)",
+        "artist": "Culoe De Song",
+        "album": "Elevation",
+        "albumArt": "https://lh3.googleusercontent.com/mk2WzuWEa0S6x8Db3uRmTzr-QOKZIb2vJV01ORZe0SSbZQCL2BGSYFGAfv64b0CyCKNXAf8aSZ65A7Q=w544-h544-s-l90-rj",
+        "duration": 342000,
+        "explicit": false
+      },
+      {
+        "trackId": "uzplC1z06LU",
+        "title": "Not The Same (Black Coffee feat. Shoba Remix) (feat. Clubhouse)",
+        "artist": "Nitefreak",
+        "album": "Not The Same (Black Coffee feat. Shoba Remix)",
+        "albumArt": "https://lh3.googleusercontent.com/hw9DNaN-XIG-uIRtu3Og-vsTAxgGgNToyOUc8SPWR4PVscb2x3h-XQordXHqqoNwEyqsJTT8pxA9gew=w544-h544-l90-rj",
+        "duration": 216000,
+        "explicit": false
+      },
+      {
+        "trackId": "iUqA6Po3YA0",
+        "title": "Back to our roots",
+        "artist": "Artificial Deejay",
+        "album": "Deep house hub v.01",
+        "albumArt": "https://lh3.googleusercontent.com/FAAM3dRCzjpUvjP44aYo1QVedkwNsXLr4DPrYu7ci5yuJmU__72bH4MFfgntGvFlFxNUWoLEK0IlF5ZQVw=w544-h544-l90-rj",
+        "duration": 220000,
+        "explicit": false
+      },
+      {
+        "trackId": "LBD3NlYn4wM",
+        "title": "Karibu",
+        "artist": "WITH U",
+        "album": "Karibu",
+        "albumArt": "https://lh3.googleusercontent.com/cTjqh04IOaI8BfRpSv-fC_-zhafOVr6R__Lc6cvrt1egFA-zi0ZTFVYSzW9mD8xlqgoBdEHU3hXOps4fWQ=w544-h544-l90-rj",
+        "duration": 243000,
+        "explicit": false
+      },
+      {
+        "trackId": "Oq3__rJ4M5o",
+        "title": "Unchain (Manoo Remix)",
+        "artist": "MA/JI",
+        "album": "Unchain",
+        "albumArt": "https://lh3.googleusercontent.com/nWGWIPxi9IwrdkfU7QSnhpl-DeT5buunMmFiz_VySsJwAHb44eaO3ug6HLsM9S5WtRGDhzUOJwrrPj-Q=w544-h544-l90-rj",
+        "duration": 481000,
+        "explicit": false
+      },
+      {
+        "trackId": "Y6xjAD8ONew",
+        "title": "Time (feat. Cassie)",
+        "artist": "Black Coffee",
+        "album": "Subconsciously",
+        "albumArt": "https://lh3.googleusercontent.com/ENRxAX125z_oltUouJ2vnHCeh_PvMN2iJnUkpanZgrxZgdM01bcTlL3FAIvRsFKUpuNcosHufDloszo=w544-h544-l90-rj",
+        "duration": 293000,
+        "explicit": false
+      },
+      {
+        "trackId": "QMQtQSgJQwg",
+        "title": "Count Your Blessings",
+        "artist": "Mizz & Rabs Vhafuwi",
+        "album": "Count Your Blessings",
+        "albumArt": "https://lh3.googleusercontent.com/YgqTudYbo-uhWjkfCi0OakuBUTKO_2Lhl0x2z1oROrFhfVX3pLlUCHCLuA_lrAXqexxeE9hKriYFZTw=w544-h544-l90-rj",
+        "duration": 480000,
+        "explicit": false
+      },
+      {
+        "trackId": "pVgboC5A7yQ",
+        "title": "Open Your Heart",
+        "artist": "Escape Deep",
+        "album": "Open Your Heart",
+        "albumArt": "https://lh3.googleusercontent.com/ZPeS96OHwQHzlYvlW8wiafK3g7H1vyGbOgyaUbhsbZS3oPlYVpjtsFC_3e4IEYJ0gFhE2cpjFfCJlG0r=w544-h544-l90-rj",
+        "duration": 188000,
+        "explicit": false
+      },
+      {
+        "trackId": "W8L0jeSF63I",
+        "title": "Izizwe Remix 1080p",
+        "artist": "Rodrick Music",
+        "album": "",
+        "albumArt": "https://i.ytimg.com/vi/W8L0jeSF63I/hq720.jpg?sqp=-oaymwEXCNUGEOADIAQqCwjVARCqCBh4INgESFo&rs=AMzJL3nR3Chfmu6nmJuQcK1vWvGxOOkkBg",
+        "duration": 442000,
+        "explicit": false
+      },
+      {
+        "trackId": "W8nSOkT05cQ",
+        "title": "LENA",
+        "artist": "Sane Wav",
+        "album": "LENA",
+        "albumArt": "https://lh3.googleusercontent.com/n1QPNJ4hHmuzXCPKEeqGbEND4-Lj6fz8o2SERemqPOn3JDKUMdHEEx-rlvu8D5iQBdXFqHTDmqv20FM=w544-h544-l90-rj",
+        "duration": 200000,
+        "explicit": false
+      },
+      {
+        "trackId": "PHnDu_jozmU",
+        "title": "Latlal (Hyenah Remix)",
+        "artist": "Fairplay",
+        "album": "Latlal Remixes",
+        "albumArt": "https://lh3.googleusercontent.com/FK08dhPk1uCDQE7xI6u9CtIlCljKi8YQ_wJXICkkYCE-IS_qW-7Bpv0Li2dlMqvKMFW3I1Ak8IwzEOYb=w544-h544-l90-rj",
+        "duration": 414000,
+        "explicit": false
+      },
+      {
+        "trackId": "-KhsAAEL_ig",
+        "title": "Shine Together",
+        "artist": "Phantom Beats SA",
+        "album": "Whispers In My Head",
+        "albumArt": "https://lh3.googleusercontent.com/V7AhqU2trMmwV-M7k-okRYADisFOMBVpR45Qme5mSVkx8-PRNOza0RqAfH5SsQHXj9j7oi6GJ5PXqOvz=w544-h544-l90-rj",
+        "duration": 301000,
+        "explicit": false
+      },
+      {
+        "trackId": "dUbnvxB7WtA",
+        "title": "Let Your Body Fly",
+        "artist": "MAISON ROYALE",
+        "album": "Let Your Body Fly",
+        "albumArt": "https://lh3.googleusercontent.com/-i4NaSms7ct5a9bOVQxAhDH06Qm_KauuED63u4u_G7Nnox0YrelNrdkapR9ekBWTDhdEo1jzzjzat3-C=w544-h544-l90-rj",
+        "duration": 205000,
+        "explicit": false
+      },
+      {
+        "trackId": "fYaxsRAoKZo",
+        "title": "Far Away Place (Rampa Remix)",
+        "artist": "Xinobi",
+        "album": "Far Away Place (Rampa Remix)",
+        "albumArt": "https://lh3.googleusercontent.com/yU7t93P7QdRJGXJWXk7CANUNo1VKwz8VzoLO78x0MltqRMP6lDhS6PJ4tAlOM21N7SNny1WIWazhBUr9=w544-h544-l90-rj",
+        "duration": 220000,
+        "explicit": false
+      },
+      {
+        "trackId": "sj6XTbhNWVU",
+        "title": "City Rains (feat. Mque)",
+        "artist": "Mobi Dixon",
+        "album": "Tribal Soul",
+        "albumArt": "https://lh3.googleusercontent.com/l95on4O1wPrAz3h7_DLTsLNHzZoS2NOP8aoYDlodZ96zZA2r3zYxZGxS2usmQH3W1nfWhSSKhfIm5SmJ=w544-h544-l90-rj",
+        "duration": 431000,
+        "explicit": false
+      },
+      {
+        "trackId": "4eUyKMump1k",
+        "title": "The Bright Forest",
+        "artist": "Culoe De Song",
+        "album": "A Giant Leap",
+        "albumArt": "https://lh3.googleusercontent.com/YZ7j1iFYOQ-Jtz1T8Gy5MN92wnRCKZfR22rqMMf4SGjebqFORf2R-1kHOK5dnIlJbpI_M7-NTXUR6RSY=w544-h544-s-l90-rj",
+        "duration": 356000,
+        "explicit": false
+      },
+      {
+        "trackId": "djvGlRaq6Mg",
+        "title": "Never Gonna Forget (feat. Elderbrook)",
+        "artist": "Black Coffee",
+        "album": "Subconsciously",
+        "albumArt": "https://lh3.googleusercontent.com/ENRxAX125z_oltUouJ2vnHCeh_PvMN2iJnUkpanZgrxZgdM01bcTlL3FAIvRsFKUpuNcosHufDloszo=w544-h544-l90-rj",
+        "duration": 200000,
+        "explicit": false
+      },
+      {
+        "trackId": "AvyFR7AaCdI",
+        "title": "O Mera Dil (feat. Lady Parul)",
+        "artist": "Pablo Fierro",
+        "album": "O Mera Dil",
+        "albumArt": "https://lh3.googleusercontent.com/Lvn9eKhN99hZTJ8KYrKEZuxHGbbjXooPh7iQ64tckVv-HlkUASKFjthUfrPB6mn5lFXOLstmVY_Gqhfx3w=w544-h544-l90-rj",
+        "duration": 531000,
+        "explicit": false
+      },
+      {
+        "trackId": "zn4PPV4MivI",
+        "title": "Moment (Atjazz Vocal Mix)",
+        "artist": "Musaria",
+        "album": "Moment",
+        "albumArt": "https://lh3.googleusercontent.com/iOnyuprQ6DXf6usw2hSzW_Smh9BUASBzH5d1r4-szNfehDYCdoSi3Yn_MvUAwDEZDK3OWN79NX_iHByQvg=w544-h544-l90-rj",
+        "duration": 569000,
+        "explicit": false
+      },
+      {
+        "trackId": "XIkz1pJLljo",
+        "title": "Ho Phoqa",
+        "artist": "Litshepe Lr",
+        "album": "Ho Phoqa",
+        "albumArt": "https://lh3.googleusercontent.com/G9nadyGomBbRq8fYBle-OPILxtsYhokix-SWG3Zq5SZR14EBr1WA1o0MZnlkblGWyi9Tt8K13WuavcSMdg=w544-h544-l90-rj",
+        "duration": 213000,
+        "explicit": false
+      },
+      {
+        "trackId": "C_dSoqHCTMQ",
+        "title": "Yamore (Edit Version) (feat. Cesária Évora, Benja (NL) & Franc Fala)",
+        "artist": "MoBlack",
+        "album": "Yamore (Edit Version)",
+        "albumArt": "https://lh3.googleusercontent.com/Zx4yZAOLwDvchGi3QMO8KnVV0ECrsuhyQzpN0nDwIUiWupTUMYckkq2rCwK01BdkDTmEWDtTjk6JrH5-=w544-h544-l90-rj",
+        "duration": 150000,
+        "explicit": false
+      },
+      {
+        "trackId": "xER5iKuz3u8",
+        "title": "10 GRAM (feat. Nova Sa Style & Westboy)",
+        "artist": "REAL K MFANAKOTA",
+        "album": "10 GRAM",
+        "albumArt": "https://lh3.googleusercontent.com/GeMqJNqffD2DhA4bckjx7erE9Q4Ajfv53m3M_E0smUGA4yVeTPJjGdXFpW1KzNtwnmoe2KFloopb8iU=w544-h544-l90-rj",
+        "duration": 273000,
+        "explicit": false
+      },
+      {
+        "trackId": "ZVwp1GM997c",
+        "title": "Definition of Love",
+        "artist": "Naomi Sharon",
+        "album": "Obsidian",
+        "albumArt": "https://yt3.googleusercontent.com/KjbwwUCVabUWxfVElS04TJ83-PErc27oj4R4UQY3FvouUBP0pAWvczAUwQwi2iL4QGxvPJAh_dIZ2bIzRA=w544-h544-l90-rj",
+        "duration": 196000,
+        "explicit": false
+      },
+      {
+        "trackId": "uKUxoXxtNlM",
+        "title": "Thohoyandou (feat. Crosswavee)",
+        "artist": "Mizo Phyll",
+        "album": "For the Vhathu",
+        "albumArt": "https://lh3.googleusercontent.com/9WfToicY8_re6AsWHt-yX0r8mmnoMQ7uEMFv2UVCL4CffEVJNrYStUm7PlBL9Nycv4WUs_x-ITENnvYq=w544-h544-l90-rj",
+        "duration": 241000,
+        "explicit": false
+      },
+      {
+        "trackId": "zVs2IHV0jX8",
+        "title": "Iñigo Quintero - Si No Estás (IBARA Remix)",
+        "artist": "Ibara",
+        "album": "",
+        "albumArt": "https://i.ytimg.com/vi/zVs2IHV0jX8/hq720.jpg?sqp=-oaymwEXCNUGEOADIAQqCwjVARCqCBh4INgESFo&rs=AMzJL3msmHSHPUCNXC-TUWBzOw-SfE3GGQ",
+        "duration": 180000,
+        "explicit": false
+      },
+      {
+        "trackId": "9ShBMMPCCHw",
+        "title": "Una Fiesta Diferente",
+        "artist": "Matias Aguayo",
+        "album": "The Visitor",
+        "albumArt": "https://lh3.googleusercontent.com/cVAsFeAOW-mXhQJaRYI9hjAgi538VUCxZV18yrofunVisorbVCtjUqKiOyiUY6aTbC8nyzh809_IVsLR6w=w544-h544-l90-rj",
+        "duration": 352000,
+        "explicit": false
+      },
+      {
+        "trackId": "dv665B57w2E",
+        "title": "Drive (Edit) (feat. Delilah Montagu)",
+        "artist": "Black Coffee",
+        "album": "Drive",
+        "albumArt": "https://lh3.googleusercontent.com/u4Ezx7tSPx5K0ruKiJAB7cCsVkj_0l38E7yanH4_BgxlIjT-FxTegryAf80JwghC0tEot3pxhp2wzC6h=w544-h544-l90-rj",
+        "duration": 192000,
+        "explicit": false
+      },
+      {
+        "trackId": "bHAMlPzKxT8",
+        "title": "Ubuhle Obungaka (feat. Yolophonik & Jaedon Daniels)",
+        "artist": "Ovuyonke.",
+        "album": "Ubuhle Obungaka",
+        "albumArt": "https://lh3.googleusercontent.com/VozFLu2r2ehYrnDPOpEj_4IRQ-Mn0cqzk0l3MJQTYUTTnUVtc1VUrgi07-EmIbGtBEaYpkucQmD298GS=w544-h544-l90-rj",
+        "duration": 196000,
+        "explicit": false
+      },
+      {
+        "trackId": "HoT5eWo8gVY",
+        "title": "I Adore You (feat. Daecolm)",
+        "artist": "HUGEL",
+        "album": "I Adore You",
+        "albumArt": "https://lh3.googleusercontent.com/odGXesmyLRQ_TA9taEt68btzmCqkXJ3L1-86Cb7TxWUce-EaNbaYVGVY_LNT0s8BLeCYuX3IFarwdl2Z=w544-h544-l90-rj",
+        "duration": 214000,
+        "explicit": false
+      },
+      {
+        "trackId": "5FwtAYb5OyI",
+        "title": "No Contest",
+        "artist": "Culoe De Song",
+        "album": "Exodus",
+        "albumArt": "https://lh3.googleusercontent.com/E07RNFfmYZc6heDr7ZNGVMMKHzopK76jsMi9_dRHS7BDy0PTO75rp6fk5ydfcFqanC-siO9gA5L3_4JV=w544-h544-l90-rj",
+        "duration": 279000,
+        "explicit": false
+      },
+      {
+        "trackId": "ByQv_q4j1N4",
+        "title": "Her Eyes",
+        "artist": "Charlie Jeer",
+        "album": "Her Eyes",
+        "albumArt": "https://lh3.googleusercontent.com/8yswdnKCnw-sNhc_TdEZapKOPOPZbZ2ukrAZBhq9xQZCv0qrWH9XVBth4dR9sq253k-dRPFMoTJK0Bh_=w544-h544-l90-rj",
+        "duration": 216000,
+        "explicit": false
+      },
+      {
+        "trackId": "ndpR9-cMDho",
+        "title": "Ternielle Nelson - African Woman (Culoe De Song Remix)",
+        "artist": "Madorasindahouse",
+        "album": "",
+        "albumArt": "https://i.ytimg.com/vi/ndpR9-cMDho/sddefault.jpg?sqp=-oaymwEWCKoDEPABIAQqCghqEJQEGHgg6AJIWg&rs=AMzJL3mraw9BapsdnKxUHxke6eLy9HxKkQ",
+        "duration": 501000,
+        "explicit": false
+      },
+      {
+        "trackId": "JFPyuAXUvcg",
+        "title": "Well",
+        "artist": "Matias Aguayo",
+        "album": "Are You Really Lost",
+        "albumArt": "https://lh3.googleusercontent.com/oanbR_Ob-4ybQMuE2J35sOAbLSjUkuSgjJ0Ku3MtUOL9eIFOoWkKQl96eMsLG70akySofmth5VgZtUk=w544-h544-l90-rj",
+        "duration": 328000,
+        "explicit": false
+      },
+      {
+        "trackId": "iOJUJpxRgC8",
+        "title": "Sawubona",
+        "artist": "Nobuhle",
+        "album": "Sawubona",
+        "albumArt": "https://lh3.googleusercontent.com/RtJw3qAgJpGHHg1Yk1pQfbKVojLrt9bGuQlVIX7GpsHpsz7-blEorItt37UJq40GS7okZLNIF5aqbR2xXw=w544-h544-l90-rj",
+        "duration": 255000,
+        "explicit": false
+      },
+      {
+        "trackId": "sUq0VYSefNQ",
+        "title": "Vele Uyena (Risk It All)",
+        "artist": "Skyla Tylaa",
+        "album": "Vele Uyena (Risk It All)",
+        "albumArt": "https://lh3.googleusercontent.com/QOnCmbqygBA-NVb0WVH9TQoe1cjgo3ML06lCwkJXIdRx2LCgTAXGFB2BmFzxrNxN6lSEoeir6yF0xMJo=w544-h544-l90-rj",
+        "duration": 375000,
+        "explicit": false
+      },
+      {
+        "trackId": "DoxH-gfPl3k",
+        "title": "Clap Your Hands (feat. Xolani Sithole)",
+        "artist": "Zakes Bantwini",
+        "album": "Love, Light and Music",
+        "albumArt": "https://lh3.googleusercontent.com/k08CSoODOG0qBUk-Skw9ENn0PH-xGRqUqzd7SFX9SjhDi6apVdqgmLWmLK6pI2AnSX7NShbQvNDPUpuqyA=w544-h544-l90-rj",
+        "duration": 331000,
+        "explicit": false
+      },
+      {
+        "trackId": "0ZFMkaPTbZ0",
+        "title": "Dave Andres - Undercover",
+        "artist": "Dave Andres",
+        "album": "",
+        "albumArt": "https://i.ytimg.com/vi/0ZFMkaPTbZ0/hq720.jpg?sqp=-oaymwEXCNUGEOADIAQqCwjVARCqCBh4INgESFo&rs=AMzJL3kQ6rHhc3fKwFxbddZyepNUsG7ydA",
+        "duration": 417000,
+        "explicit": false
+      },
+      {
+        "trackId": "G_dY6i85DL8",
+        "title": "Kaletshaba (Nkosi Nikelo Remix)",
+        "artist": "Majasto",
+        "album": "Lepantsola Fashioneng",
+        "albumArt": "https://lh3.googleusercontent.com/KQ5-Em0NAuc9VPetkG_I9fFucMF4kdEEg15qo0M8ZToKihRw94q_CFbwFBV_DIlimjm22H-uSDNnr5Bt8g=w544-h544-l90-rj",
+        "duration": 271000,
+        "explicit": false
+      },
+      {
+        "trackId": "fTEg6I5Ulo0",
+        "title": "Miraviglia (El Mundo Remix)",
+        "artist": "Bross (RO)",
+        "album": "Miraviglia",
+        "albumArt": "https://lh3.googleusercontent.com/_I4VzYmO0MNxzSq4gu94ygihS6GzlUPW4Z2dFXzCo5_D1D5rTAkMpQgn3gMam_WLLEqZ3TvZsM6cvjdL=w544-h544-l90-rj",
+        "duration": 548000,
+        "explicit": false
+      },
+      {
+        "trackId": "HcLEPGKTK_o",
+        "title": "Nkosi",
+        "artist": "Da Capo",
+        "album": "Indigo Child II: Love & Frequency",
+        "albumArt": "https://lh3.googleusercontent.com/mg7b3JQChfwA6LTkcniK3DtuJQU_jqrtmBU-Tl-aDlsUCSsJIfiVpkFzVNTcCeAI_BHDr6DuxeMZOcTIQw=w544-h544-l90-rj",
+        "duration": 432000,
+        "explicit": false
+      },
+      {
+        "trackId": "Hjxx32p4BKU",
+        "title": "DBN Flight 389 (Black Motion X Osaze X Spice Drums Mix)",
+        "artist": "Busi Mhlongo",
+        "album": "M2KR Black Motion X Osaze X Spice Drums & Busi Mhlongo",
+        "albumArt": "https://lh3.googleusercontent.com/j-dvt12FynEK3pOPI7pffp1wmYUgXH6JyFzbpm8V7SIFo3V2x1LcYdDAvE-inlXFATZG8mypT9y-w1GV=w544-h544-l90-rj",
+        "duration": 377000,
+        "explicit": false
+      },
+      {
+        "trackId": "OjgsdQbVzRI",
+        "title": "Last Night",
+        "artist": "Rivo",
+        "album": "Last Night",
+        "albumArt": "https://lh3.googleusercontent.com/gxtALPSCKkWYhw-T6H2Yk3zLpbimfaWNkKwFBc8-2LOhr-O9w_44VujGP4-pNCbYsaYtssjUnPrS4VMF=w544-h544-l90-rj",
+        "duration": 223000,
+        "explicit": false
+      },
+      {
+        "trackId": "pRuMUt_pZRs",
+        "title": "Ubuhle Bakho",
+        "artist": "Da Capo",
+        "album": "Indigo Child II: Love & Frequency",
+        "albumArt": "https://lh3.googleusercontent.com/mg7b3JQChfwA6LTkcniK3DtuJQU_jqrtmBU-Tl-aDlsUCSsJIfiVpkFzVNTcCeAI_BHDr6DuxeMZOcTIQw=w544-h544-l90-rj",
+        "duration": 462000,
+        "explicit": false
+      },
+      {
+        "trackId": "Xj-dQPdhULQ",
+        "title": "Loving You",
+        "artist": "Buddynice & Finn Colbert",
+        "album": "One Again",
+        "albumArt": "https://lh3.googleusercontent.com/6yqMpb9RP7Ywaw9VaFaO0a9CCiYr0D9Ovoy3NP42hZ6B2XaITcwBdySmfaXSQQC27OoF8nuE5LEB07Lm=w544-h544-l90-rj",
+        "duration": 251000,
+        "explicit": false
+      },
+      {
+        "trackId": "6bgupiUGfqA",
+        "title": "Sene Kela (Mr Raoul K & Laolu Version)",
+        "artist": "Mr Raoul K, Laolu",
+        "album": "Still Living In Slavery - Pt. 1",
+        "albumArt": "https://lh3.googleusercontent.com/Cwra5C2Sb9zCtoPztpOTiM0Ntp20neofEfpa6AMESfjdz3yu-WHhqX1W4ZemUb0M_r77DpyDL-0Hk4Y2pw=w544-h544-l90-rj",
+        "duration": 444000,
+        "explicit": false
+      },
+      {
+        "trackId": "inJaK9Teb3s",
+        "title": "Nka E Koala",
+        "artist": "Ntate Stunna",
+        "album": "Nka E Koala",
+        "albumArt": "https://lh3.googleusercontent.com/A7aS-oZIqKyyB5HgujLvT3ttwh83qEAktC4KqvMyAkxiGBE_nYbqRiwQNr3oe6vNgyWk0YBce6I4YdKE-A=w544-h544-l90-rj",
+        "duration": 266000,
+        "explicit": false
+      },
+      {
+        "trackId": "kvmcim85uI8",
+        "title": "Trying My Best",
+        "artist": "ZWOTHE KEYS",
+        "album": "NOTE TO SELF",
+        "albumArt": "https://lh3.googleusercontent.com/T-jarsIelY0Am_049tSDb6TNZizA3idbLu43Tfwhyb0wb8YpAeNgCptykhJmL4yWvZaxY_oe7onaUGKe=w544-h544-l90-rj",
+        "duration": 279000,
+        "explicit": false
+      },
+      {
+        "trackId": "EfnaSariB9Y",
+        "title": "See the Light (feat. Natasha Watts)",
+        "artist": "Manoo",
+        "album": "See the Light",
+        "albumArt": "https://lh3.googleusercontent.com/Z6TdtTpsmpMB3EuIQVa-VICHRXRgJ6Hjz03FuOTBcJleafy_5XnS24oeDEyAg04RbK-emw-yrwkPILpnjQ=w544-h544-l90-rj",
+        "duration": 518000,
+        "explicit": false
+      },
+      {
+        "trackId": "xyHPDH3fzlw",
+        "title": "Single",
+        "artist": "Dhem scott",
+        "album": "Phone ya lla",
+        "albumArt": "https://lh3.googleusercontent.com/KwtPpX1Sj2L6D2HTWsjt4T8mDAgt9S8hR8exG5uQnaYas0ztfSG8bTPWNWvdb20byqfQ5LlTBa4mFipHEA=w544-h544-l90-rj",
+        "duration": 227000,
+        "explicit": false
+      },
+      {
+        "trackId": "k5HKmv_48Go",
+        "title": "Mosotho",
+        "artist": "Wave Rhyder",
+        "album": "Manothi",
+        "albumArt": "https://lh3.googleusercontent.com/8yoPy5TbiCwy6Y9E8bFJgI5OJjIQWXI9D6-VeH8RzKfNsK6n6MhAbsCh5UMhRbdWzFYGp0ICXrYjz6Pg=w544-h544-l90-rj",
+        "duration": 209000,
+        "explicit": false
+      },
+      {
+        "trackId": "rKAdOtbhRyA",
+        "title": "So in Love",
+        "artist": "Matias Aguayo",
+        "album": "Are You Really Lost",
+        "albumArt": "https://lh3.googleusercontent.com/oanbR_Ob-4ybQMuE2J35sOAbLSjUkuSgjJ0Ku3MtUOL9eIFOoWkKQl96eMsLG70akySofmth5VgZtUk=w544-h544-l90-rj",
+        "duration": 375000,
+        "explicit": false
+      },
+      {
+        "trackId": "nkAdrjfr9f0",
+        "title": "Osunlade feat Divine Essence - My Reflection (Manoo Stella Remix)",
+        "artist": "manooofficial",
+        "album": "",
+        "albumArt": "https://i.ytimg.com/vi/nkAdrjfr9f0/hqdefault.jpg?sqp=-oaymwEWCMACELQBIAQqCghQEJADGFogjgJIWg&rs=AMzJL3ka9HKQiNCVKFoaEo2KMn1r0Fza0A",
+        "duration": 453000,
+        "explicit": false
+      },
+      {
+        "trackId": "GYcgmKRvKYo",
+        "title": "Blue (feat. Madishu)",
+        "artist": "Lane Boy",
+        "album": "Blue",
+        "albumArt": "https://yt3.googleusercontent.com/lhkXJIqH11zHzTxwKiBr_wdFbczbJgQB-MZVf5teR5Y_O5_cZLvLYPkLmq4eyAMMB4t8m3xw_h3-k_ch=w544-h544-l90-rj",
+        "duration": 161000,
+        "explicit": false
+      },
+      {
+        "trackId": "zE_b1LC5vXU",
+        "title": "Remember (Alright)",
+        "artist": "ATANA",
+        "album": "Remember (Alright)",
+        "albumArt": "https://lh3.googleusercontent.com/kpdmNP0ldlXnDbZRyUrUqZMKUqIcFVNn2pJ2bvx34oweD7Uq7tcc3j0I7XA3v5uDVfwtH0QzrQGUW3VB=w544-h544-l90-rj",
+        "duration": 205000,
+        "explicit": false
+      },
+      {
+        "trackId": "j1QrD9-S4sU",
+        "title": "Move",
+        "artist": "Adam Port",
+        "album": "Move",
+        "albumArt": "https://lh3.googleusercontent.com/wUNs9EG9Jag5AoJ_QTpO1sbV5KrYprZxiAAHUa1BIG5WcQgNxRFb3pnulRHfJljfYbR_NjNAtvMxEg_wEA=w544-h544-l90-rj",
+        "duration": 178000,
+        "explicit": false
+      },
+      {
+        "trackId": "Ije0QpfYGk8",
+        "title": "U Kwini (feat. Tango, Wayne, Dcrazer & DECIDE_HULELA044)",
+        "artist": "Simefree",
+        "album": "U Kwini",
+        "albumArt": "https://lh3.googleusercontent.com/OKCDJd3KCTalkmq-1HdsEk40gxoXoVZwOuQMQA-Vq2Q-vDKo8N3jtWJaKZXnMTl60T9-HU6bV6pCLAsM=w544-h544-l90-rj",
+        "duration": 248000,
+        "explicit": false
+      },
+      {
+        "trackId": "8lkCVPxdp9Y",
+        "title": "YAHWEH (feat. Sickluv)",
+        "artist": "Dan Shaw",
+        "album": "YAHWEH",
+        "albumArt": "https://lh3.googleusercontent.com/D-75T4OiSrEKJoxzQC9bTzC5uTq_Io8gfOuO9PzEZoZ_Tdif2GUM3dsSqXV-xMY-r-qbDzK95_b0oTKw=w544-h544-l90-rj",
+        "duration": 259000,
+        "explicit": false
+      }
+    ]
+  }
+]

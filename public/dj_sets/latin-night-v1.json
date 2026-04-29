@@ -1,0 +1,95 @@
+{
+  "id": "latin-night-v1",
+  "name": "Latin Night V1",
+  "theme": "Prepared reggaeton / latin-club event set",
+  "tracks": [
+    {
+      "trackId": "3S8X4hEs2l4",
+      "title": "Opening Track",
+      "artist": "Deck A Sample",
+      "bpm": 128,
+      "key": "Am",
+      "energy": 0.74,
+      "cueIn": 0,
+      "cueOut": 150,
+      "safeExit": "outro",
+      "voiceNote": "Warm opener. Let the groove settle before the first move."
+    },
+    {
+      "trackId": "o5PVzsGRbm8",
+      "title": "Second Lift",
+      "artist": "Deck B Sample",
+      "bpm": 130,
+      "key": "Gm",
+      "energy": 0.82,
+      "cueIn": 12,
+      "cueOut": 168,
+      "safeExit": "chorus tail",
+      "voiceNote": "First real energy lift."
+    },
+    {
+      "trackId": "v7-u37U4T_c",
+      "title": "Third Drive",
+      "artist": "Radio Lab Seed",
+      "bpm": 132,
+      "key": "Fm",
+      "energy": 0.86,
+      "cueIn": 10,
+      "cueOut": 172,
+      "safeExit": "outro",
+      "voiceNote": "Keep momentum up. Good place for a short hype line."
+    },
+    {
+      "trackId": "dQw4w9WgXcQ",
+      "title": "Curveball Familiarity",
+      "artist": "Crowd Familiarity Test",
+      "bpm": 113,
+      "key": "Bbm",
+      "energy": 0.68,
+      "cueIn": 8,
+      "cueOut": 160,
+      "safeExit": "final chorus tail",
+      "voiceNote": "Use as a familiarity checkpoint in the sample runner."
+    }
+  ],
+  "transitions": [
+    {
+      "fromTrackId": "3S8X4hEs2l4",
+      "toTrackId": "o5PVzsGRbm8",
+      "type": "blend",
+      "approved": true,
+      "mixInAt": 150,
+      "startNextAt": 12,
+      "overlapSeconds": 12,
+      "notes": "Standard lounge blend into the first lift."
+    },
+    {
+      "fromTrackId": "o5PVzsGRbm8",
+      "toTrackId": "v7-u37U4T_c",
+      "type": "energy-swap",
+      "approved": true,
+      "mixInAt": 168,
+      "startNextAt": 10,
+      "overlapSeconds": 10,
+      "notes": "Tighter handoff, keep the room moving."
+    },
+    {
+      "fromTrackId": "v7-u37U4T_c",
+      "toTrackId": "dQw4w9WgXcQ",
+      "type": "familiarity-reset",
+      "approved": true,
+      "mixInAt": 172,
+      "startNextAt": 8,
+      "overlapSeconds": 14,
+      "notes": "Softer overlap into a more familiar moment."
+    }
+  ],
+  "branches": [],
+  "voiceMoments": [
+    {
+      "trackId": "o5PVzsGRbm8",
+      "when": "post-transition",
+      "style": "hype"
+    }
+  ]
+}

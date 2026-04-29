@@ -6,3 +6,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 metadata_cache.json
+deep_shadow_cache.json
+.venv-deep-shadow/
+deep_shadow_models/
+public/*.html_partial
+public/*.html_partial*

@@ -1,0 +1,47 @@
+# workmux project configuration for Jukebox-youtube
+
+#-------------------------------------------------------------------------------
+# Git
+#-------------------------------------------------------------------------------
+
+main_branch: main
+base_branch: main
+merge_strategy: merge
+
+#-------------------------------------------------------------------------------
+# Tmux
+#-------------------------------------------------------------------------------
+
+# Two panes: top for Claude Code agent, bottom for logs/server
+panes:
+  - command: claude
+    focus: true
+  - split: vertical
+    size: 30
+    command: clear
+
+#-------------------------------------------------------------------------------
+# Agent & AI
+#-------------------------------------------------------------------------------
+
+agent: claude
+
+#-------------------------------------------------------------------------------
+# Files
+#-------------------------------------------------------------------------------
+
+files:
+  # Symlink node_modules so each worktree doesn't reinstall everything
+  symlink:
+    - node_modules
+
+#-------------------------------------------------------------------------------
+# Hooks
+#-------------------------------------------------------------------------------
+
+# Nothing to run on create since node_modules is symlinked
+
+# Dashboard actions
+dashboard:
+  commit: "Commit all staged changes with a descriptive message"
+  merge: "!workmux merge"

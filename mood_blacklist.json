@@ -1,1 +1,75 @@
-{}
+{
+  "custom_vibe": [
+    "Ozzy Osbourne - Mr Darkness (feat. Zakk Wylde)"
+  ],
+  "brazilian": [
+    "Kordhell - Murder In My Mind",
+    "XXXTENTACION - Jocelyn Flores",
+    "It It Anita - Dixon Kentucky",
+    "Don Dixon - Take a Walk with Me",
+    "Drea - Justified",
+    "General Base - Back Again (Extended Version)",
+    "Ceca - Da Raskinem Sa Njom",
+    "David Guetta - When Love Takes Over [Original Extended] (feat. Kelly Rowland)"
+  ],
+  "phonk": [
+    "Kordhell - Murder In My Mind",
+    "XXXTENTACION - Jocelyn Flores",
+    "General Base - Back Again (Extended Version)",
+    "Ceca - Da Raskinem Sa Njom",
+    "David Guetta - When Love Takes Over [Original Extended] (feat. Kelly Rowland)"
+  ],
+  "chill": [
+    "Mr. Minea Official - love your last goodbye",
+    "Sköll - Sotto La Pelle",
+    "It It Anita - Dixon Kentucky",
+    "Don Dixon - Take a Walk with Me",
+    "Drea - Justified",
+    "General Base - Back Again (Extended Version)",
+    "Ceca - Da Raskinem Sa Njom",
+    "David Guetta - When Love Takes Over [Original Extended] (feat. Kelly Rowland)"
+  ],
+  "organichouse": [
+    "Mr. Minea Official - love your last goodbye",
+    "Sköll - Sotto La Pelle"
+  ],
+  "croatiantrash": [
+    "Mr. Minea Official - love your last goodbye",
+    "Sköll - Sotto La Pelle",
+    "A Touch of Class - Around the World (La La La La La)"
+  ],
+  "argentinian": [
+    "It It Anita - Dixon Kentucky",
+    "Don Dixon - Take a Walk with Me",
+    "Drea - Justified"
+  ],
+  "afrohouse": [
+    "It It Anita - Dixon Kentucky",
+    "Don Dixon - Take a Walk with Me",
+    "Drea - Justified"
+  ],
+  "jackinhouse": [
+    "General Base - Back Again (Extended Version)",
+    "Ceca - Da Raskinem Sa Njom",
+    "David Guetta - When Love Takes Over [Original Extended] (feat. Kelly Rowland)"
+  ],
+  "croatian": [
+    "General Base - Back Again (Extended Version)",
+    "Ceca - Da Raskinem Sa Njom",
+    "David Guetta - When Love Takes Over [Original Extended] (feat. Kelly Rowland)"
+  ],
+  "croatianeurodance": [
+    "General Base - Back Again (Extended Version)",
+    "Ceca - Da Raskinem Sa Njom",
+    "David Guetta - When Love Takes Over [Original Extended] (feat. Kelly Rowland)"
+  ],
+  "house": [
+    "David Guetta - Baby Don't Hurt Me"
+  ],
+  "chill+house+summer": [
+    "A Touch of Class - Around the World (La La La La La)"
+  ],
+  "afrohouse+chill+summer": [
+    "A Touch of Class - Around the World (La La La La La)"
+  ]
+}
