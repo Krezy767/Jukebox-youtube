@@ -3,7 +3,7 @@ services:
     name: bar-jukebox
     runtime: node
     plan: free
-    buildCommand: npm install
+    buildCommand: npm install && python3 -m pip install -r requirements.txt
     startCommand: npm start
     envVars:
       - key: HOST
