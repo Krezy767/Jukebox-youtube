@@ -784,6 +784,27 @@ function parseISO8601Duration(duration) {
   return (h * 3600 + m * 60 + s) * 1000;
 }
 
+function parseDurationToMs(duration) {
+  if (typeof duration === 'number' && Number.isFinite(duration)) {
+    // Internal tracks use ms; ytmusicapi wire format uses seconds.
+    return duration > 1000 ? Math.round(duration) : Math.round(duration * 1000);
+  }
+  if (typeof duration === 'string') {
+    const trimmed = duration.trim();
+    if (!trimmed) return 0;
+    if (/^PT/i.test(trimmed)) return parseISO8601Duration(trimmed);
+    if (trimmed.includes(':')) {
+      const parts = trimmed.split(':').map(n => parseInt(n, 10));
+      if (parts.some(n => Number.isNaN(n))) return 0;
+      if (parts.length === 2) return (parts[0] * 60 + parts[1]) * 1000;
+      if (parts.length === 3) return (parts[0] * 3600 + parts[1] * 60 + parts[2]) * 1000;
+    }
+    const numeric = Number(trimmed);
+    if (Number.isFinite(numeric)) return numeric > 1000 ? Math.round(numeric) : Math.round(numeric * 1000);
+  }
+  return 0;
+}
+
 async function getLastFmMetadata(artist, track) {
   if (!LASTFM_API_KEY) return null;
   try {
@@ -907,6 +928,18 @@ async function ytVideoDetails(videoIds) {
 
 function isValidSongDuration(durationMs) {
   return durationMs >= MIN_TRACK_DURATION_MS && durationMs <= MAX_TRACK_DURATION_MS;
+}
+
+function isLikelyShortsTrack(track = {}) {
+  const title = `${track.title || ''} ${track.album || ''}`.toLowerCase();
+  return /\b(shorts?|clip|preview|snippet|teaser)\b/.test(title);
+}
+
+function isQueueEligibleTrack(track = {}) {
+  const durationMs = parseDurationToMs(track.duration);
+  return !!track.trackId &&
+    isValidSongDuration(durationMs) &&
+    !isLikelyShortsTrack(track);
 }
 
 // Score a raw API item by how "audio-only / YouTube Music-like" it is.
@@ -1246,15 +1279,7 @@ async function startYTMusicService() {
 // Map a song from the Python service to our internal track format.
 // Python service returns: { videoId, title, artist, album, albumArt, duration (seconds), videoType }
 function mapYtmSongToTrack(song) {
-  let durationMs = 0;
-  if (typeof song.duration === 'number') {
-    durationMs = song.duration * 1000;
-  } else if (typeof song.duration === 'string' && song.duration.includes(':')) {
-    const parts = song.duration.split(':').map(Number);
-    if (parts.length === 2) durationMs = (parts[0] * 60 + parts[1]) * 1000;
-    else if (parts.length === 3) durationMs = (parts[0] * 3600 + parts[1] * 60 + parts[2]) * 1000;
-  }
-  if (durationMs === 0) durationMs = 240000; 
+  const durationMs = parseDurationToMs(song.duration);
 
   return {
     trackId:     song.videoId,
@@ -2068,11 +2093,19 @@ async function resolveTrackAudio(item) {
           timeout: 8000,
         });
         
-        // Find the "Gold" ATV version
-        const atv = (songs || []).find(s => s.videoType === 'MUSIC_VIDEO_TYPE_ATV' && s.videoId);
+        // Find the "Gold" ATV version, but never replace a valid request with a Short/preview.
+        const atv = (songs || []).find(s => {
+          const durationMs = parseDurationToMs(s.duration);
+          return s.videoType === 'MUSIC_VIDEO_TYPE_ATV' &&
+            s.videoId &&
+            isValidSongDuration(durationMs) &&
+            !isLikelyShortsTrack({ title: s.title, album: s.album });
+        });
         if (atv) {
           console.log(`🎵 [ATV RESOLVE] Studio Audio found: "${item.title}" → ${atv.videoId}`);
           item.trackId = atv.videoId;
+          item.duration = parseDurationToMs(atv.duration) || item.duration;
+          item.videoType = atv.videoType || item.videoType;
           return;
         }
       } catch (ytmErr) {
@@ -2088,10 +2121,19 @@ async function resolveTrackAudio(item) {
         .sort((a, b) => scoreYtScrapeItem(b) - scoreYtScrapeItem(a));
 
       if (videos.length > 0) {
-        const best = videos[0];
-        if (best.id !== item.trackId) {
-          console.log(`🎵 [ATV RESOLVE] Scraper found high-quality fallback: "${item.title}" → ${best.id}`);
-          item.trackId = best.id;
+        const details = await ytVideoDetails(videos.slice(0, 8).map(v => v.id));
+        const detailMap = new Map(details.map(d => [d.id, d]));
+        const best = videos
+          .map(v => detailMap.get(v.id))
+          .filter(Boolean)
+          .map(mapVideoItemToTrack)
+          .filter(isQueueEligibleTrack)
+          .sort((a, b) => scoreYtItem({ snippet: { title: a.title, channelTitle: a.artist } }) - scoreYtItem({ snippet: { title: b.title, channelTitle: b.artist } }))
+          .reverse()[0];
+        if (best && best.trackId !== item.trackId) {
+          console.log(`🎵 [ATV RESOLVE] Scraper found high-quality fallback: "${item.title}" → ${best.trackId}`);
+          item.trackId = best.trackId;
+          item.duration = best.duration || item.duration;
         }
       }
     } catch (scrapeErr) {}
@@ -2241,7 +2283,9 @@ app.get('/api/search', async (req, res) => {
   const cached = searchCacheGet(normalizedQ);
   if (cached) {
     console.log(`🔍 [Search] cache hit for: "${q.trim()}"`);
-    return res.json(cached);
+    const safeCached = cached.filter(isQueueEligibleTrack);
+    if (safeCached.length !== cached.length) searchCacheSet(normalizedQ, safeCached);
+    return res.json(safeCached);
   }
 
   try {
@@ -2258,10 +2302,14 @@ app.get('/api/search', async (req, res) => {
         });
         
         // We now ACCEPT ATVs because they work on the new player identity!
-        let candidates = (songs || []).filter(s => s.videoId && s.duration);
+        let candidates = (songs || []).filter(s => {
+          if (!s.videoId) return false;
+          const durationMs = parseDurationToMs(s.duration);
+          return isValidSongDuration(durationMs) && !isLikelyShortsTrack({ title: s.title, album: s.album });
+        });
         
         if (candidates.length) {
-          tracks = candidates.map(mapYtmSongToTrack).filter(t => isValidSongDuration(t.duration));
+          tracks = candidates.map(mapYtmSongToTrack).filter(isQueueEligibleTrack);
           console.log(`🔍 [Search] ytmusicapi: ${tracks.length} tracks for "${q.trim()}" (including ATVs)`);
         }
       } catch (ytmErr) {
@@ -2284,7 +2332,7 @@ app.get('/api/search', async (req, res) => {
           try {
             const details = await ytVideoDetails(scraped.map(item => item.id)); // 1 unit
             details.sort((a, b) => scoreYtItem(b) - scoreYtItem(a));
-            tracks = details.map(mapVideoItemToTrack).filter(t => isValidSongDuration(t.duration));
+            tracks = details.map(mapVideoItemToTrack).filter(isQueueEligibleTrack);
             console.log(`🔍 [Search] youtube-search-api fallback: ${tracks.length} tracks for "${q.trim()}"`);
           } catch (validateErr) {
             console.warn('Search: ytVideoDetails failed (quota?):', validateErr.message);
@@ -2306,7 +2354,7 @@ app.get('/api/search', async (req, res) => {
       if (videoIds.length) {
         const details = await ytVideoDetails(videoIds);
         details.sort((a, b) => scoreYtItem(b) - scoreYtItem(a));
-        tracks = details.map(mapVideoItemToTrack).filter(t => isValidSongDuration(t.duration));
+        tracks = details.map(mapVideoItemToTrack).filter(isQueueEligibleTrack);
       }
     }
 
@@ -2866,14 +2914,21 @@ app.get('/api/queue', async (req, res) => {
 });
 
 app.post('/api/queue', (req, res) => {
-  const { trackId, title, artist, album, albumArt, explicit } = req.body;
+  const { trackId, title, artist, album, albumArt, explicit, videoType } = req.body;
   if (!trackId) return res.status(400).json({ error: 'trackId required' });
   if (BLOCK_EXPLICIT && explicit) return res.status(400).json({ error: 'Explicit songs are disabled' });
+  const duration = parseDurationToMs(req.body.duration);
+  if (!isValidSongDuration(duration)) {
+    return res.status(400).json({ error: 'That result looks like a Short/clip, not a full song. Please choose another version.' });
+  }
+  if (isLikelyShortsTrack({ title, album })) {
+    return res.status(400).json({ error: 'Shorts/clips/previews cannot be added to the queue.' });
+  }
   if (queue.find(i => i.trackId === trackId)) return res.status(409).json({ error: 'Song already in queue' });
   if (currentTrack?.trackId === trackId) return res.status(409).json({ error: 'Song is currently playing' });
 
   const item = {
-    id: uuidv4(), trackId, title, artist, album, albumArt, explicit,
+    id: uuidv4(), trackId, title, artist, album, albumArt, explicit, duration, videoType,
     votes: 1,
     voters: new Set([req.body.voterId || 'anon']),
     addedAt: Date.now(),
